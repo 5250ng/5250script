@@ -55,6 +55,7 @@ enum class TokenType {
     // Control flow
     IF, ELSE, ENDIF, WHILE, ENDWHILE, REPEAT, ENDREPEAT,
     LABEL, GOTO,
+    OR, AND, THEN,
 
     // Functions
     DEF, ENDDEF, CALL, RETURN,

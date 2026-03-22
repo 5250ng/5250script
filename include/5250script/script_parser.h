@@ -47,10 +47,15 @@ class ScriptParser {
     bool isAIDKeyToken(TokenType type) const;
     bool isLocalKeyToken(TokenType type) const;
 
+    // Condition parsing (recursive descent)
+    std::shared_ptr<ConditionNode> parseConditionExpr(const TokenLine &tokens, int &pos);
+    std::shared_ptr<ConditionNode> parseConditionAnd(const TokenLine &tokens, int &pos);
+    std::shared_ptr<ConditionNode> parseConditionAtom(const TokenLine &tokens, int &pos);
+    bool isComparisonOp(TokenType type) const;
+    CompareOp tokenToCompareOp(TokenType type) const;
+
     // Helpers
     void error(int line, const QString &msg);
-    bool parseCondition(const TokenLine &tokens, int startIndex,
-                        QString &left, CompareOp &op, QString &right);
     uint8_t aidByteForToken(TokenType type) const;
 
     QVector<ParseError> m_errors;

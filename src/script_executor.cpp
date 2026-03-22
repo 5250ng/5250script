@@ -337,14 +337,7 @@ void ScriptExecutor::executeNode(const std::shared_ptr<ASTNode> &node) {
     }
 
     case NodeType::If: {
-        bool condResult;
-        if (node->condOp == CompareOp::IsSet) {
-            condResult = m_variables.contains(node->condLeft);
-        } else {
-            QString left = interpolateVariables(node->condLeft);
-            QString right = interpolateVariables(node->condRight);
-            condResult = evaluateCondition(left, node->condOp, right);
-        }
+        bool condResult = node->condition ? evaluateConditionNode(*node->condition) : false;
         if (condResult) {
             if (!node->children.isEmpty()) {
                 m_execStack.append({&node->children, 0, 0, 0});
@@ -359,14 +352,7 @@ void ScriptExecutor::executeNode(const std::shared_ptr<ASTNode> &node) {
     }
 
     case NodeType::While: {
-        bool condResult;
-        if (node->condOp == CompareOp::IsSet) {
-            condResult = m_variables.contains(node->condLeft);
-        } else {
-            QString left = interpolateVariables(node->condLeft);
-            QString right = interpolateVariables(node->condRight);
-            condResult = evaluateCondition(left, node->condOp, right);
-        }
+        bool condResult = node->condition ? evaluateConditionNode(*node->condition) : false;
         if (condResult) {
             if (!node->children.isEmpty()) {
                 // Decrement parent frame index so WHILE is re-executed after body completes
@@ -676,6 +662,29 @@ bool ScriptExecutor::evaluateCondition(const QString &left, CompareOp op, const 
     case CompareOp::IsSet: break;    // handled in executeNode
     }
     return false;
+}
+
+bool ScriptExecutor::evaluateConditionNode(const ConditionNode &node) const {
+    bool result;
+
+    if (node.logicalOp != LogicalOp::None) {
+        // Compound node
+        bool lhs = node.lhs ? evaluateConditionNode(*node.lhs) : false;
+        bool rhs = node.rhs ? evaluateConditionNode(*node.rhs) : false;
+        result = (node.logicalOp == LogicalOp::And) ? (lhs && rhs) : (lhs || rhs);
+    } else {
+        // Leaf node
+        if (node.op == CompareOp::IsSet) {
+            result = m_variables.contains(node.left);
+        } else {
+            QString left = interpolateVariables(node.left);
+            QString right = interpolateVariables(node.right);
+            result = evaluateCondition(left, node.op, right);
+        }
+    }
+
+    if (node.negated) result = !result;
+    return result;
 }
 
 // --- Variable support ---
