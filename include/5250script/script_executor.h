@@ -115,6 +115,7 @@ class ScriptExecutor : public QObject {
 
     // Condition evaluation
     bool evaluateCondition(const QString &left, CompareOp op, const QString &right) const;
+    bool evaluateConditionNode(const ConditionNode &node) const;
 
     // GOTO support (only at root level)
     void gotoLabel(const QString &label);

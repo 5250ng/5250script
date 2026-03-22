@@ -56,6 +56,11 @@ class TestScriptLexer : public QObject {
     void testRepeat();
     void testDefCallReturn();
 
+    // Compound condition tokens
+    void testOrAndThenTokens();
+    void testMixedCaseKeywordRejected();
+    void testAllLowercaseKeywordsAccepted();
+
   private:
     ScriptLexer *m_lexer;
 };
@@ -459,6 +464,51 @@ void TestScriptLexer::testDefCallReturn() {
     QCOMPARE(result[0][1].value, "doSomething");
     QCOMPARE(result[0][2].type, TokenType::LPAREN);
     QCOMPARE(result[0][3].type, TokenType::RPAREN);
+}
+
+void TestScriptLexer::testOrAndThenTokens() {
+    auto result = m_lexer->tokenize("IF $a == \"1\" OR $b == \"2\" AND $c == \"3\" THEN");
+    QCOMPARE(result.size(), 1);
+    auto &tl = result[0];
+    // IF $a == "1" OR $b == "2" AND $c == "3" THEN
+    QCOMPARE(tl[0].type, TokenType::IF);
+    QCOMPARE(tl[4].type, TokenType::OR);
+    QCOMPARE(tl[4].value, "OR");
+    QCOMPARE(tl[8].type, TokenType::AND);
+    QCOMPARE(tl[8].value, "AND");
+    QCOMPARE(tl[12].type, TokenType::THEN);
+    QCOMPARE(tl[12].value, "THEN");
+}
+
+void TestScriptLexer::testMixedCaseKeywordRejected() {
+    // Mixed case per token should produce UNKNOWN
+    auto result = m_lexer->tokenize("If");
+    QCOMPARE(result.size(), 1);
+    QCOMPARE(result[0][0].type, TokenType::UNKNOWN);
+
+    result = m_lexer->tokenize("Not");
+    QCOMPARE(result.size(), 1);
+    QCOMPARE(result[0][0].type, TokenType::UNKNOWN);
+
+    result = m_lexer->tokenize("Isset");
+    QCOMPARE(result.size(), 1);
+    QCOMPARE(result[0][0].type, TokenType::UNKNOWN);
+
+    result = m_lexer->tokenize("iF");
+    QCOMPARE(result.size(), 1);
+    QCOMPARE(result[0][0].type, TokenType::UNKNOWN);
+}
+
+void TestScriptLexer::testAllLowercaseKeywordsAccepted() {
+    auto result = m_lexer->tokenize("if not isset or and then");
+    QCOMPARE(result.size(), 1);
+    auto &tl = result[0];
+    QCOMPARE(tl[0].type, TokenType::IF);
+    QCOMPARE(tl[1].type, TokenType::NOT);
+    QCOMPARE(tl[2].type, TokenType::ISSET);
+    QCOMPARE(tl[3].type, TokenType::OR);
+    QCOMPARE(tl[4].type, TokenType::AND);
+    QCOMPARE(tl[5].type, TokenType::THEN);
 }
 
 QTEST_MAIN(TestScriptLexer)

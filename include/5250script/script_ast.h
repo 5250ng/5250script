@@ -118,6 +118,23 @@ enum class CompareOp {
     Eq, Ne, Lt, Gt, Le, Ge, Contains, IsSet
 };
 
+// Logical operator for compound conditions
+enum class LogicalOp { None, And, Or };
+
+// Recursive condition tree for IF/WHILE
+struct ConditionNode {
+    // Leaf condition (comparison or ISSET)
+    QString left;
+    CompareOp op = CompareOp::Eq;
+    QString right;
+    bool negated = false;
+
+    // Compound condition (binary tree)
+    LogicalOp logicalOp = LogicalOp::None;
+    std::shared_ptr<ConditionNode> lhs;
+    std::shared_ptr<ConditionNode> rhs;
+};
+
 struct ASTNode {
     NodeType type;
     int line = 0;  // Source line number for error reporting
@@ -143,9 +160,7 @@ struct ASTNode {
     ExtractType extractType = ExtractType::FromPosition;
 
     // Condition (for IF, WHILE)
-    QString condLeft;       // Left operand (variable name or literal)
-    CompareOp condOp = CompareOp::Eq;
-    QString condRight;      // Right operand (variable name or literal)
+    std::shared_ptr<ConditionNode> condition;
 
     // AID key byte (for AIDKey nodes)
     uint8_t aidByte = 0;

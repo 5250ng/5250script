@@ -559,20 +559,18 @@ std::shared_ptr<ASTNode> ScriptParser::parseIf(const TokenLine &tokens) {
     node->type = NodeType::If;
     node->line = tokens[0].line;
 
-    // IF ISSET $var
-    if (tokens.size() >= 3 && tokens[1].type == TokenType::ISSET) {
-        node->condLeft = tokens[2].value;
-        node->condOp = CompareOp::IsSet;
+    if (tokens.size() < 2) {
+        error(node->line, "IF requires condition (e.g., IF $VAR == \"value\" or IF ISSET($VAR))");
         return node;
     }
 
-    // IF $var op value
-    if (tokens.size() < 4) {
-        error(node->line, "IF requires condition (e.g., IF $VAR == \"value\" or IF ISSET $VAR)");
-        return node;
-    }
+    int pos = 1;
+    node->condition = parseConditionExpr(tokens, pos);
 
-    parseCondition(tokens, 1, node->condLeft, node->condOp, node->condRight);
+    // Strip trailing THEN if present
+    if (pos < tokens.size() && tokens[pos].type == TokenType::THEN)
+        pos++;
+
     return node;
 }
 
@@ -581,19 +579,18 @@ std::shared_ptr<ASTNode> ScriptParser::parseWhile(const TokenLine &tokens) {
     node->type = NodeType::While;
     node->line = tokens[0].line;
 
-    // WHILE ISSET $var
-    if (tokens.size() >= 3 && tokens[1].type == TokenType::ISSET) {
-        node->condLeft = tokens[2].value;
-        node->condOp = CompareOp::IsSet;
-        return node;
-    }
-
-    if (tokens.size() < 4) {
+    if (tokens.size() < 2) {
         error(node->line, "WHILE requires condition");
         return node;
     }
 
-    parseCondition(tokens, 1, node->condLeft, node->condOp, node->condRight);
+    int pos = 1;
+    node->condition = parseConditionExpr(tokens, pos);
+
+    // Strip trailing THEN if present
+    if (pos < tokens.size() && tokens[pos].type == TokenType::THEN)
+        pos++;
+
     return node;
 }
 
@@ -756,27 +753,135 @@ bool ScriptParser::isLocalKeyToken(TokenType type) const {
     }
 }
 
-bool ScriptParser::parseCondition(const TokenLine &tokens, int startIndex,
-                                  QString &left, CompareOp &op, QString &right) {
-    if (startIndex + 2 >= tokens.size()) return false;
+// --- Recursive descent condition parser ---
 
-    left = tokens[startIndex].value;
-
-    switch (tokens[startIndex + 1].type) {
-    case TokenType::OP_EQ: op = CompareOp::Eq; break;
-    case TokenType::OP_NE: op = CompareOp::Ne; break;
-    case TokenType::OP_LT: op = CompareOp::Lt; break;
-    case TokenType::OP_GT: op = CompareOp::Gt; break;
-    case TokenType::OP_LE: op = CompareOp::Le; break;
-    case TokenType::OP_GE: op = CompareOp::Ge; break;
-    case TokenType::CONTAINS: op = CompareOp::Contains; break;
+bool ScriptParser::isComparisonOp(TokenType type) const {
+    switch (type) {
+    case TokenType::OP_EQ: case TokenType::OP_NE:
+    case TokenType::OP_LT: case TokenType::OP_GT:
+    case TokenType::OP_LE: case TokenType::OP_GE:
+    case TokenType::CONTAINS:
+        return true;
     default:
-        error(tokens[startIndex].line, "Expected comparison operator");
         return false;
     }
+}
 
-    right = tokens[startIndex + 2].value;
-    return true;
+CompareOp ScriptParser::tokenToCompareOp(TokenType type) const {
+    switch (type) {
+    case TokenType::OP_EQ: return CompareOp::Eq;
+    case TokenType::OP_NE: return CompareOp::Ne;
+    case TokenType::OP_LT: return CompareOp::Lt;
+    case TokenType::OP_GT: return CompareOp::Gt;
+    case TokenType::OP_LE: return CompareOp::Le;
+    case TokenType::OP_GE: return CompareOp::Ge;
+    case TokenType::CONTAINS: return CompareOp::Contains;
+    default: return CompareOp::Eq;
+    }
+}
+
+std::shared_ptr<ConditionNode> ScriptParser::parseConditionExpr(const TokenLine &tokens, int &pos) {
+    auto left = parseConditionAnd(tokens, pos);
+    while (pos < tokens.size() && tokens[pos].type == TokenType::OR) {
+        pos++; // consume OR
+        auto right = parseConditionAnd(tokens, pos);
+        auto compound = std::make_shared<ConditionNode>();
+        compound->logicalOp = LogicalOp::Or;
+        compound->lhs = left;
+        compound->rhs = right;
+        left = compound;
+    }
+    return left;
+}
+
+std::shared_ptr<ConditionNode> ScriptParser::parseConditionAnd(const TokenLine &tokens, int &pos) {
+    auto left = parseConditionAtom(tokens, pos);
+    while (pos < tokens.size() && tokens[pos].type == TokenType::AND) {
+        pos++; // consume AND
+        auto right = parseConditionAtom(tokens, pos);
+        auto compound = std::make_shared<ConditionNode>();
+        compound->logicalOp = LogicalOp::And;
+        compound->lhs = left;
+        compound->rhs = right;
+        left = compound;
+    }
+    return left;
+}
+
+std::shared_ptr<ConditionNode> ScriptParser::parseConditionAtom(const TokenLine &tokens, int &pos) {
+    if (pos >= tokens.size()) {
+        error(tokens[0].line, "Expected condition");
+        return std::make_shared<ConditionNode>();
+    }
+
+    // NOT prefix
+    if (tokens[pos].type == TokenType::NOT) {
+        pos++;
+        auto inner = parseConditionAtom(tokens, pos);
+        inner->negated = !inner->negated;
+        return inner;
+    }
+
+    // ISSET(variable)
+    if (tokens[pos].type == TokenType::ISSET) {
+        pos++; // consume ISSET
+        auto node = std::make_shared<ConditionNode>();
+        node->op = CompareOp::IsSet;
+        if (pos >= tokens.size() || tokens[pos].type != TokenType::LPAREN) {
+            error(tokens[0].line, "ISSET requires parentheses: ISSET($VAR)");
+            return node;
+        }
+        pos++; // consume (
+        if (pos >= tokens.size() || tokens[pos].type != TokenType::VARIABLE) {
+            error(tokens[0].line, "ISSET requires a variable: ISSET($VAR)");
+            return node;
+        }
+        node->left = tokens[pos].value;
+        pos++; // consume variable
+        if (pos >= tokens.size() || tokens[pos].type != TokenType::RPAREN) {
+            error(tokens[0].line, "Expected ')' after ISSET($VAR");
+            return node;
+        }
+        pos++; // consume )
+        return node;
+    }
+
+    // Grouping parenthesis
+    if (tokens[pos].type == TokenType::LPAREN) {
+        pos++; // consume (
+        auto inner = parseConditionExpr(tokens, pos);
+        if (pos >= tokens.size() || tokens[pos].type != TokenType::RPAREN) {
+            error(tokens[0].line, "Expected ')' to close parenthesized condition");
+            return inner;
+        }
+        pos++; // consume )
+        return inner;
+    }
+
+    // Leaf: value OP value
+    auto node = std::make_shared<ConditionNode>();
+    if (pos >= tokens.size()) {
+        error(tokens[0].line, "Expected condition operand");
+        return node;
+    }
+    node->left = tokens[pos].value;
+    pos++;
+
+    if (pos >= tokens.size() || !isComparisonOp(tokens[pos].type)) {
+        error(tokens[0].line, "Expected comparison operator");
+        return node;
+    }
+    node->op = tokenToCompareOp(tokens[pos].type);
+    pos++;
+
+    if (pos >= tokens.size()) {
+        error(tokens[0].line, "Expected right-hand operand");
+        return node;
+    }
+    node->right = tokens[pos].value;
+    pos++;
+
+    return node;
 }
 
 std::shared_ptr<ASTNode> ScriptParser::parseDef(const TokenLine &tokens) {

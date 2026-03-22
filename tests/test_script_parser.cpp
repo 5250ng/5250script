@@ -85,6 +85,28 @@ class TestScriptParser : public QObject {
     void testIfIsset();
     void testWhileIsset();
 
+    // Compound conditions
+    void testIfNotIsset();
+    void testIfNotComparison();
+    void testIfOr();
+    void testIfNotIssetOrNotIsset();
+    void testWhileNotIsset();
+    void testWhileAnd();
+    void testThenKeyword();
+    void testParenthesizedGrouping();
+    void testParenthesizedGroupingComplex();
+    void testNotParenthesizedGroup();
+    void testNestedParentheses();
+    void testNotNestedConditions();
+    void testPrecedenceAndOverOr();
+    void testCaseInsensitivityLowercase();
+    void testCaseInsensitivityUppercase();
+    void testCaseInsensitivityMixed();
+    void testMixedCasePerTokenRejected();
+    void testMismatchedParentheses();
+    void testEmptyParentheses();
+    void testIssetWithoutParentheses();
+
   private:
     ScriptParser *m_parser;
 };
@@ -407,9 +429,10 @@ void TestScriptParser::testIfElseEndif() {
     QCOMPARE(result.root->children.size(), 1);
     auto ifNode = result.root->children[0];
     QCOMPARE(ifNode->type, NodeType::If);
-    QCOMPARE(ifNode->condLeft, "$X");
-    QCOMPARE(ifNode->condOp, CompareOp::Eq);
-    QCOMPARE(ifNode->condRight, "OK");
+    QVERIFY(ifNode->condition);
+    QCOMPARE(ifNode->condition->left, "$X");
+    QCOMPARE(ifNode->condition->op, CompareOp::Eq);
+    QCOMPARE(ifNode->condition->right, "OK");
     QCOMPARE(ifNode->children.size(), 1);
     QCOMPARE(ifNode->elseChildren.size(), 1);
 }
@@ -809,9 +832,10 @@ void TestScriptParser::testIfContains() {
     QVERIFY(!result.hasErrors());
     auto ifNode = result.root->children[0];
     QCOMPARE(ifNode->type, NodeType::If);
-    QCOMPARE(ifNode->condLeft, "$line");
-    QCOMPARE(ifNode->condOp, CompareOp::Contains);
-    QCOMPARE(ifNode->condRight, "Poda");
+    QVERIFY(ifNode->condition);
+    QCOMPARE(ifNode->condition->left, "$line");
+    QCOMPARE(ifNode->condition->op, CompareOp::Contains);
+    QCOMPARE(ifNode->condition->right, "Poda");
     QCOMPARE(ifNode->children.size(), 1);
 
     // WHILE with CONTAINS
@@ -822,7 +846,8 @@ void TestScriptParser::testIfContains() {
     );
     QVERIFY(!result.hasErrors());
     auto whileNode = result.root->children[0];
-    QCOMPARE(whileNode->condOp, CompareOp::Contains);
+    QVERIFY(whileNode->condition);
+    QCOMPARE(whileNode->condition->op, CompareOp::Contains);
 }
 
 void TestScriptParser::testInput() {
@@ -853,9 +878,9 @@ void TestScriptParser::testInputMultiple() {
 }
 
 void TestScriptParser::testIfIsset() {
-    // IF ISSET $VAR
+    // IF ISSET($VAR)
     auto result = m_parser->parse(
-        "IF ISSET $SESSION_USERNAME\n"
+        "IF ISSET($SESSION_USERNAME)\n"
         "    LOG \"has username\"\n"
         "ELSE\n"
         "    LOG \"no username\"\n"
@@ -864,25 +889,330 @@ void TestScriptParser::testIfIsset() {
     QVERIFY(!result.hasErrors());
     auto ifNode = result.root->children[0];
     QCOMPARE(ifNode->type, NodeType::If);
-    QCOMPARE(ifNode->condLeft, "$SESSION_USERNAME");
-    QCOMPARE(ifNode->condOp, CompareOp::IsSet);
+    QVERIFY(ifNode->condition);
+    QCOMPARE(ifNode->condition->left, "$SESSION_USERNAME");
+    QCOMPARE(ifNode->condition->op, CompareOp::IsSet);
     QCOMPARE(ifNode->children.size(), 1);
     QCOMPARE(ifNode->elseChildren.size(), 1);
 }
 
 void TestScriptParser::testWhileIsset() {
-    // WHILE ISSET $VAR
+    // WHILE ISSET($VAR)
     auto result = m_parser->parse(
-        "WHILE ISSET $FLAG\n"
+        "WHILE ISSET($FLAG)\n"
         "    LOG \"flag is set\"\n"
         "ENDWHILE\n"
     );
     QVERIFY(!result.hasErrors());
     auto whileNode = result.root->children[0];
     QCOMPARE(whileNode->type, NodeType::While);
-    QCOMPARE(whileNode->condLeft, "$FLAG");
-    QCOMPARE(whileNode->condOp, CompareOp::IsSet);
+    QVERIFY(whileNode->condition);
+    QCOMPARE(whileNode->condition->left, "$FLAG");
+    QCOMPARE(whileNode->condition->op, CompareOp::IsSet);
     QCOMPARE(whileNode->children.size(), 1);
+}
+
+// --- Compound condition tests ---
+
+void TestScriptParser::testIfNotIsset() {
+    auto result = m_parser->parse(
+        "IF NOT ISSET($VAR)\n"
+        "    LOG \"not set\"\n"
+        "ENDIF\n"
+    );
+    QVERIFY(!result.hasErrors());
+    auto ifNode = result.root->children[0];
+    QVERIFY(ifNode->condition);
+    QCOMPARE(ifNode->condition->op, CompareOp::IsSet);
+    QCOMPARE(ifNode->condition->left, "$VAR");
+    QVERIFY(ifNode->condition->negated);
+}
+
+void TestScriptParser::testIfNotComparison() {
+    auto result = m_parser->parse(
+        "IF NOT $var == \"value\"\n"
+        "    LOG \"not equal\"\n"
+        "ENDIF\n"
+    );
+    QVERIFY(!result.hasErrors());
+    auto cond = result.root->children[0]->condition;
+    QVERIFY(cond);
+    QCOMPARE(cond->op, CompareOp::Eq);
+    QCOMPARE(cond->left, "$var");
+    QCOMPARE(cond->right, "value");
+    QVERIFY(cond->negated);
+}
+
+void TestScriptParser::testIfOr() {
+    auto result = m_parser->parse(
+        "IF $a == \"1\" OR $b == \"2\"\n"
+        "    LOG \"ok\"\n"
+        "ENDIF\n"
+    );
+    QVERIFY(!result.hasErrors());
+    auto cond = result.root->children[0]->condition;
+    QVERIFY(cond);
+    QCOMPARE(cond->logicalOp, LogicalOp::Or);
+    QVERIFY(cond->lhs);
+    QCOMPARE(cond->lhs->left, "$a");
+    QCOMPARE(cond->lhs->right, "1");
+    QVERIFY(cond->rhs);
+    QCOMPARE(cond->rhs->left, "$b");
+    QCOMPARE(cond->rhs->right, "2");
+}
+
+void TestScriptParser::testIfNotIssetOrNotIsset() {
+    auto result = m_parser->parse(
+        "IF NOT ISSET($VAR1) OR NOT ISSET($VAR2) THEN\n"
+        "    LOG \"missing\"\n"
+        "ENDIF\n"
+    );
+    QVERIFY(!result.hasErrors());
+    auto cond = result.root->children[0]->condition;
+    QVERIFY(cond);
+    QCOMPARE(cond->logicalOp, LogicalOp::Or);
+    QVERIFY(cond->lhs && cond->lhs->negated);
+    QCOMPARE(cond->lhs->op, CompareOp::IsSet);
+    QCOMPARE(cond->lhs->left, "$VAR1");
+    QVERIFY(cond->rhs && cond->rhs->negated);
+    QCOMPARE(cond->rhs->op, CompareOp::IsSet);
+    QCOMPARE(cond->rhs->left, "$VAR2");
+}
+
+void TestScriptParser::testWhileNotIsset() {
+    auto result = m_parser->parse(
+        "WHILE NOT ISSET($VAR)\n"
+        "    LOG \"waiting\"\n"
+        "ENDWHILE\n"
+    );
+    QVERIFY(!result.hasErrors());
+    auto cond = result.root->children[0]->condition;
+    QVERIFY(cond);
+    QCOMPARE(cond->op, CompareOp::IsSet);
+    QVERIFY(cond->negated);
+    QCOMPARE(cond->left, "$VAR");
+}
+
+void TestScriptParser::testWhileAnd() {
+    auto result = m_parser->parse(
+        "WHILE $a == \"1\" AND $b == \"2\"\n"
+        "    LOG \"both\"\n"
+        "ENDWHILE\n"
+    );
+    QVERIFY(!result.hasErrors());
+    auto cond = result.root->children[0]->condition;
+    QVERIFY(cond);
+    QCOMPARE(cond->logicalOp, LogicalOp::And);
+    QCOMPARE(cond->lhs->left, "$a");
+    QCOMPARE(cond->rhs->left, "$b");
+}
+
+void TestScriptParser::testThenKeyword() {
+    // THEN should be accepted and ignored
+    auto result = m_parser->parse(
+        "IF $a == \"1\" THEN\n"
+        "    LOG \"ok\"\n"
+        "ENDIF\n"
+    );
+    QVERIFY(!result.hasErrors());
+    auto cond = result.root->children[0]->condition;
+    QVERIFY(cond);
+    QCOMPARE(cond->left, "$a");
+    QCOMPARE(cond->right, "1");
+}
+
+void TestScriptParser::testParenthesizedGrouping() {
+    // IF ($a == "1" OR $b == "2") AND $c == "3"
+    auto result = m_parser->parse(
+        "IF ($a == \"1\" OR $b == \"2\") AND $c == \"3\"\n"
+        "    LOG \"ok\"\n"
+        "ENDIF\n"
+    );
+    QVERIFY(!result.hasErrors());
+    auto cond = result.root->children[0]->condition;
+    QVERIFY(cond);
+    QCOMPARE(cond->logicalOp, LogicalOp::And);
+    QVERIFY(cond->lhs);
+    QCOMPARE(cond->lhs->logicalOp, LogicalOp::Or);
+    QCOMPARE(cond->lhs->lhs->left, "$a");
+    QCOMPARE(cond->lhs->rhs->left, "$b");
+    QVERIFY(cond->rhs);
+    QCOMPARE(cond->rhs->left, "$c");
+    QCOMPARE(cond->rhs->right, "3");
+}
+
+void TestScriptParser::testParenthesizedGroupingComplex() {
+    // IF ($a == "1" AND $b == "2") OR ($c == "3" AND $d == "4")
+    auto result = m_parser->parse(
+        "IF ($a == \"1\" AND $b == \"2\") OR ($c == \"3\" AND $d == \"4\")\n"
+        "    LOG \"ok\"\n"
+        "ENDIF\n"
+    );
+    QVERIFY(!result.hasErrors());
+    auto cond = result.root->children[0]->condition;
+    QVERIFY(cond);
+    QCOMPARE(cond->logicalOp, LogicalOp::Or);
+    QVERIFY(cond->lhs && cond->lhs->logicalOp == LogicalOp::And);
+    QCOMPARE(cond->lhs->lhs->left, "$a");
+    QCOMPARE(cond->lhs->rhs->left, "$b");
+    QVERIFY(cond->rhs && cond->rhs->logicalOp == LogicalOp::And);
+    QCOMPARE(cond->rhs->lhs->left, "$c");
+    QCOMPARE(cond->rhs->rhs->left, "$d");
+}
+
+void TestScriptParser::testNotParenthesizedGroup() {
+    // IF NOT ($a == "1" OR $b == "2")
+    auto result = m_parser->parse(
+        "IF NOT ($a == \"1\" OR $b == \"2\")\n"
+        "    LOG \"neither\"\n"
+        "ENDIF\n"
+    );
+    QVERIFY(!result.hasErrors());
+    auto cond = result.root->children[0]->condition;
+    QVERIFY(cond);
+    QCOMPARE(cond->logicalOp, LogicalOp::Or);
+    QVERIFY(cond->negated);
+    QCOMPARE(cond->lhs->left, "$a");
+    QCOMPARE(cond->rhs->left, "$b");
+}
+
+void TestScriptParser::testNestedParentheses() {
+    // IF (($a == "1" OR $b == "2") AND $c == "3") OR $d == "4"
+    auto result = m_parser->parse(
+        "IF (($a == \"1\" OR $b == \"2\") AND $c == \"3\") OR $d == \"4\"\n"
+        "    LOG \"ok\"\n"
+        "ENDIF\n"
+    );
+    QVERIFY(!result.hasErrors());
+    auto cond = result.root->children[0]->condition;
+    QVERIFY(cond);
+    QCOMPARE(cond->logicalOp, LogicalOp::Or);
+    QVERIFY(cond->lhs);
+    QCOMPARE(cond->lhs->logicalOp, LogicalOp::And);
+    QVERIFY(cond->lhs->lhs);
+    QCOMPARE(cond->lhs->lhs->logicalOp, LogicalOp::Or);
+    QCOMPARE(cond->lhs->lhs->lhs->left, "$a");
+    QCOMPARE(cond->lhs->lhs->rhs->left, "$b");
+    QCOMPARE(cond->lhs->rhs->left, "$c");
+    QCOMPARE(cond->rhs->left, "$d");
+}
+
+void TestScriptParser::testNotNestedConditions() {
+    // IF NOT (NOT ISSET($var1) AND NOT ISSET($var2))
+    auto result = m_parser->parse(
+        "IF NOT (NOT ISSET($var1) AND NOT ISSET($var2))\n"
+        "    LOG \"at least one set\"\n"
+        "ENDIF\n"
+    );
+    QVERIFY(!result.hasErrors());
+    auto cond = result.root->children[0]->condition;
+    QVERIFY(cond);
+    QCOMPARE(cond->logicalOp, LogicalOp::And);
+    QVERIFY(cond->negated); // NOT wrapping the group
+    QVERIFY(cond->lhs && cond->lhs->negated);
+    QCOMPARE(cond->lhs->op, CompareOp::IsSet);
+    QVERIFY(cond->rhs && cond->rhs->negated);
+    QCOMPARE(cond->rhs->op, CompareOp::IsSet);
+}
+
+void TestScriptParser::testPrecedenceAndOverOr() {
+    // IF $a == "1" OR $b == "2" AND $c == "3"
+    // should parse as: $a == "1" OR ($b == "2" AND $c == "3")
+    auto result = m_parser->parse(
+        "IF $a == \"1\" OR $b == \"2\" AND $c == \"3\"\n"
+        "    LOG \"ok\"\n"
+        "ENDIF\n"
+    );
+    QVERIFY(!result.hasErrors());
+    auto cond = result.root->children[0]->condition;
+    QVERIFY(cond);
+    QCOMPARE(cond->logicalOp, LogicalOp::Or);
+    // LHS is a leaf: $a == "1"
+    QVERIFY(cond->lhs);
+    QCOMPARE(cond->lhs->logicalOp, LogicalOp::None);
+    QCOMPARE(cond->lhs->left, "$a");
+    // RHS is AND: $b == "2" AND $c == "3"
+    QVERIFY(cond->rhs);
+    QCOMPARE(cond->rhs->logicalOp, LogicalOp::And);
+    QCOMPARE(cond->rhs->lhs->left, "$b");
+    QCOMPARE(cond->rhs->rhs->left, "$c");
+}
+
+void TestScriptParser::testCaseInsensitivityLowercase() {
+    // All lowercase accepted
+    auto result = m_parser->parse(
+        "if not isset($var) or not isset($var2) then\n"
+        "    LOG \"missing\"\n"
+        "ENDIF\n"
+    );
+    QVERIFY(!result.hasErrors());
+    auto cond = result.root->children[0]->condition;
+    QVERIFY(cond);
+    QCOMPARE(cond->logicalOp, LogicalOp::Or);
+}
+
+void TestScriptParser::testCaseInsensitivityUppercase() {
+    // All uppercase accepted
+    auto result = m_parser->parse(
+        "IF NOT ISSET($VAR) OR NOT ISSET($VAR2) THEN\n"
+        "    LOG \"missing\"\n"
+        "ENDIF\n"
+    );
+    QVERIFY(!result.hasErrors());
+    auto cond = result.root->children[0]->condition;
+    QVERIFY(cond);
+    QCOMPARE(cond->logicalOp, LogicalOp::Or);
+}
+
+void TestScriptParser::testCaseInsensitivityMixed() {
+    // Mixing lowercase 'if' with uppercase 'AND' is fine (each token independently valid)
+    auto result = m_parser->parse(
+        "if $a == \"1\" AND $b == \"2\"\n"
+        "    LOG \"ok\"\n"
+        "ENDIF\n"
+    );
+    QVERIFY(!result.hasErrors());
+    auto cond = result.root->children[0]->condition;
+    QVERIFY(cond);
+    QCOMPARE(cond->logicalOp, LogicalOp::And);
+}
+
+void TestScriptParser::testMixedCasePerTokenRejected() {
+    // Mixed case per token (If, Not, Isset) should be rejected
+    auto result = m_parser->parse(
+        "If Not Isset($var) Then\n"
+        "    LOG \"bad\"\n"
+        "Endif\n"
+    );
+    QVERIFY(result.hasErrors());
+}
+
+void TestScriptParser::testMismatchedParentheses() {
+    auto result = m_parser->parse(
+        "IF ($a == \"1\"\n"
+        "    LOG \"bad\"\n"
+        "ENDIF\n"
+    );
+    QVERIFY(result.hasErrors());
+}
+
+void TestScriptParser::testEmptyParentheses() {
+    auto result = m_parser->parse(
+        "IF () THEN\n"
+        "    LOG \"bad\"\n"
+        "ENDIF\n"
+    );
+    QVERIFY(result.hasErrors());
+}
+
+void TestScriptParser::testIssetWithoutParentheses() {
+    // ISSET without parentheses should now be an error
+    auto result = m_parser->parse(
+        "IF ISSET $var\n"
+        "    LOG \"bad\"\n"
+        "ENDIF\n"
+    );
+    QVERIFY(result.hasErrors());
 }
 
 QTEST_MAIN(TestScriptParser)

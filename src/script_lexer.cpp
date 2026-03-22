@@ -107,6 +107,9 @@ void ScriptLexer::initKeywords() {
     m_keywords["ENDREPEAT"]  = TokenType::ENDREPEAT;
     m_keywords["LABEL"]      = TokenType::LABEL;
     m_keywords["GOTO"]       = TokenType::GOTO;
+    m_keywords["OR"]         = TokenType::OR;
+    m_keywords["AND"]        = TokenType::AND;
+    m_keywords["THEN"]       = TokenType::THEN;
 
     // Functions
     m_keywords["DEF"]        = TokenType::DEF;
@@ -366,8 +369,20 @@ ScriptToken ScriptLexer::readWord(const QString &line, int &pos, int lineNumber)
     QString upper = word.toUpper();
 
     auto it = m_keywords.find(upper);
-    if (it != m_keywords.end())
+    if (it != m_keywords.end()) {
+        // Enforce strict casing: each keyword token must be all-uppercase or all-lowercase
+        // (digits are ignored, e.g. F1/f1 are fine)
+        bool hasUpper = false, hasLower = false;
+        for (const QChar &c : word) {
+            if (c.isLetter()) {
+                if (c.isUpper()) hasUpper = true;
+                else hasLower = true;
+            }
+        }
+        if (hasUpper && hasLower)
+            return ScriptToken(TokenType::UNKNOWN, word, lineNumber, col);
         return ScriptToken(it.value(), upper, lineNumber, col);
+    }
 
     // KEY_* character constants
     if (upper.startsWith("KEY_") && upper.length() > 4) {
