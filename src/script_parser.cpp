@@ -822,27 +822,33 @@ std::shared_ptr<ConditionNode> ScriptParser::parseConditionAtom(const TokenLine 
         return inner;
     }
 
-    // ISSET(variable)
+    // ISSET $VAR or ISSET($VAR)
     if (tokens[pos].type == TokenType::ISSET) {
         pos++; // consume ISSET
         auto node = std::make_shared<ConditionNode>();
         node->op = CompareOp::IsSet;
-        if (pos >= tokens.size() || tokens[pos].type != TokenType::LPAREN) {
-            error(tokens[0].line, "ISSET requires parentheses: ISSET($VAR)");
+        if (pos < tokens.size() && tokens[pos].type == TokenType::LPAREN) {
+            // ISSET($VAR) form
+            pos++; // consume (
+            if (pos >= tokens.size() || tokens[pos].type != TokenType::VARIABLE) {
+                error(tokens[0].line, "ISSET requires a variable: ISSET($VAR)");
+                return node;
+            }
+            node->left = tokens[pos].value;
+            pos++; // consume variable
+            if (pos >= tokens.size() || tokens[pos].type != TokenType::RPAREN) {
+                error(tokens[0].line, "Expected ')' after ISSET($VAR");
+                return node;
+            }
+            pos++; // consume )
+        } else if (pos < tokens.size() && tokens[pos].type == TokenType::VARIABLE) {
+            // ISSET $VAR form
+            node->left = tokens[pos].value;
+            pos++; // consume variable
+        } else {
+            error(tokens[0].line, "ISSET requires a variable: ISSET $VAR or ISSET($VAR)");
             return node;
         }
-        pos++; // consume (
-        if (pos >= tokens.size() || tokens[pos].type != TokenType::VARIABLE) {
-            error(tokens[0].line, "ISSET requires a variable: ISSET($VAR)");
-            return node;
-        }
-        node->left = tokens[pos].value;
-        pos++; // consume variable
-        if (pos >= tokens.size() || tokens[pos].type != TokenType::RPAREN) {
-            error(tokens[0].line, "Expected ')' after ISSET($VAR");
-            return node;
-        }
-        pos++; // consume )
         return node;
     }
 
