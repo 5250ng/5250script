@@ -16,6 +16,7 @@ set(LIB_HEADERS
     include/5250script/script_parser.h
     include/5250script/script_executor.h
     include/5250script/script_compiler.h
+    include/5250script/script_utils.h
 )
 
 set(LIB_SOURCES
@@ -23,6 +24,7 @@ set(LIB_SOURCES
     src/script_parser.cpp
     src/script_executor.cpp
     src/script_compiler.cpp
+    src/script_utils.cpp
 )
 
 add_library(5250script STATIC ${LIB_SOURCES} ${LIB_HEADERS})
