@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "script_lexer.h"
+#include <QRegularExpression>
 
 namespace core::scripting {
 
@@ -159,7 +160,8 @@ void ScriptLexer::initKeywords() {
 
 QVector<TokenLine> ScriptLexer::tokenize(const QString &source) {
     QVector<TokenLine> result;
-    const QStringList lines = source.split('\n');
+    // Split on any line ending style: \r\n (Windows), \n (Unix), \r (old Mac)
+    const QStringList lines = source.split(QRegularExpression(QStringLiteral("\\r\\n|\\r|\\n")));
     for (int i = 0; i < lines.size(); ++i) {
         TokenLine tl = tokenizeLine(lines[i], i + 1);
         if (!tl.isEmpty())
@@ -326,6 +328,8 @@ ScriptToken ScriptLexer::readStringLiteral(const QString &line, int &pos, int li
             QChar next = line[pos + 1];
             if (next == '"') { value += '"'; pos += 2; continue; }
             if (next == 'n') { value += '\n'; pos += 2; continue; }
+            if (next == 'r') { value += '\r'; pos += 2; continue; }
+            if (next == 't') { value += '\t'; pos += 2; continue; }
             if (next == '\\') { value += '\\'; pos += 2; continue; }
         }
         value += line[pos];
