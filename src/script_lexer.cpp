@@ -71,6 +71,7 @@ void ScriptLexer::initKeywords() {
     m_keywords["HOME"]       = TokenType::HOME;
     m_keywords["END"]        = TokenType::END;
     m_keywords["ESC"]        = TokenType::ESC;
+    m_keywords["ESCAPE"]     = TokenType::ESC;
     m_keywords["FIELDPLUS"]  = TokenType::FIELDPLUS;
     m_keywords["FIELDMINUS"] = TokenType::FIELDMINUS;
     m_keywords["FIELDEXIT"]  = TokenType::FIELDEXIT;
