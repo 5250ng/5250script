@@ -72,6 +72,7 @@ class TestScriptParser : public QObject {
     void testFunctionReturn();
     void testNestedDefError();
     void testDefInsideBlockError();
+    void testLabelInsideBlockError();
     void testCallUndefinedFunction();
     void testCallWrongArgCount();
     void testDuplicateFunction();
@@ -680,6 +681,22 @@ void TestScriptParser::testDefInsideBlockError() {
         if (e.message.contains("DEF must be at the top level")) found = true;
     }
     QVERIFY(found);
+}
+
+void TestScriptParser::testLabelInsideBlockError() {
+    auto result = m_parser->parse(
+        "IF $X == \"1\"\n"
+        "    LABEL inside\n"
+        "ENDIF\n"
+        "GOTO inside\n"
+    );
+    QVERIFY(result.hasErrors());
+    bool foundLabelError = false;
+    for (const auto &e : result.errors) {
+        if (e.line == 2 && e.message.contains("LABEL must be at the top level"))
+            foundLabelError = true;
+    }
+    QVERIFY(foundLabelError);
 }
 
 void TestScriptParser::testCallUndefinedFunction() {
