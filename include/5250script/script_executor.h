@@ -120,6 +120,12 @@ class ScriptExecutor : public QObject {
     // GOTO support (only at root level)
     void gotoLabel(const QString &label);
 
+    // Unwind the call stack and any nested exec frames so that the runtime
+    // is back at top-level script context. Used when ON TIMEOUT / ON ERROR
+    // handlers fire from inside a function: the handler label is, by
+    // construction, top-level, so we must exit the function first.
+    void unwindToTopLevel();
+
     // Error handlers
     QString m_onTimeoutLabel;
     QString m_onErrorLabel;
