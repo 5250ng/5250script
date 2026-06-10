@@ -990,8 +990,8 @@ uint8_t ScriptParser::aidByteForToken(TokenType type) const {
     case TokenType::F22:      return 0xBA;
     case TokenType::F23:      return 0xBB;
     case TokenType::F24:      return 0xBC;
-    case TokenType::PAGEUP:   return 0xF5; // RollUp
-    case TokenType::PAGEDOWN: return 0xF4; // RollDown
+    case TokenType::PAGEUP:   return 0xF4; // Roll Down (previous page)
+    case TokenType::PAGEDOWN: return 0xF5; // Roll Up (next page)
     case TokenType::ATTN:     return 0x70;
     case TokenType::SYSREQ:   return 0x71;
     case TokenType::HELP:     return 0xF3;
