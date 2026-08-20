@@ -1208,13 +1208,17 @@ void TestScriptParser::testEmptyParentheses() {
 }
 
 void TestScriptParser::testIssetWithoutParentheses() {
-    // ISSET without parentheses should now be an error
+    // The documented bare ISSET $VAR form is supported alongside ISSET($VAR).
     auto result = m_parser->parse(
         "IF ISSET $var\n"
-        "    LOG \"bad\"\n"
+        "    LOG \"set\"\n"
         "ENDIF\n"
     );
-    QVERIFY(result.hasErrors());
+    QVERIFY(!result.hasErrors());
+    auto ifNode = result.root->children[0];
+    QVERIFY(ifNode->condition);
+    QCOMPARE(ifNode->condition->op, CompareOp::IsSet);
+    QCOMPARE(ifNode->condition->left, "$var");
 }
 
 QTEST_MAIN(TestScriptParser)
