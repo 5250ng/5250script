@@ -119,6 +119,9 @@ void ScriptExecutor::notifyTerminalStateChanged() {
             // Terminal entered error-locked state — trigger ON ERROR handler if set
             m_waitingForUnlock = false;
             if (!m_onErrorLabel.isEmpty()) {
+                // If the error happened inside a function, exit the function first
+                // so that gotoLabel (which only accepts top-level labels) can dispatch.
+                unwindToTopLevel();
                 gotoLabel(m_onErrorLabel);
                 scheduleNextStep();
             } else {
@@ -612,6 +615,9 @@ void ScriptExecutor::endExpect(bool success) {
     } else {
         setVariable("$EXPECT_RESULT", "TIMEOUT");
         if (!m_onTimeoutLabel.isEmpty()) {
+            // If the timeout happened inside a function, exit the function first
+            // so that gotoLabel (which only accepts top-level labels) can dispatch.
+            unwindToTopLevel();
             gotoLabel(m_onTimeoutLabel);
             scheduleNextStep();
         } else {
@@ -746,6 +752,16 @@ void ScriptExecutor::gotoLabel(const QString &label) {
     m_execStack.clear();
     int targetIndex = m_parseResult.labels[label] + 1; // +1 to skip the LABEL node itself
     m_execStack.append({&m_parseResult.root->children, targetIndex, 0, 0});
+}
+
+void ScriptExecutor::unwindToTopLevel() {
+    while (!m_callStack.isEmpty()) {
+        // Pop any exec frames opened inside the current function (nested IF/WHILE/REPEAT bodies)
+        while (m_execStack.size() > m_callStack.last().execStackDepth) {
+            m_execStack.removeLast();
+        }
+        returnFromFunction();
+    }
 }
 
 // --- Function return ---
