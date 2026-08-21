@@ -100,6 +100,12 @@ ParseResult ScriptParser::parse(const QVector<TokenLine> &tokenLines) {
             continue;
         }
 
+        // LABEL must be at top level (labels are resolved against root->children only)
+        if (first == TokenType::LABEL && !blockStack.isEmpty()) {
+            error(line, "LABEL must be at the top level (not inside IF/WHILE/REPEAT/DEF)");
+            continue;
+        }
+
         // Parse the line into an AST node
         auto node = parseLine(tl);
         if (!node) continue;
