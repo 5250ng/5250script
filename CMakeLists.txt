@@ -53,4 +53,5 @@ if(BUILD_5250SCRIPT_TESTS)
 
     add_5250script_test(test_script_lexer tests/test_script_lexer.cpp)
     add_5250script_test(test_script_parser tests/test_script_parser.cpp)
+    add_5250script_test(test_script_executor_bounds tests/test_script_executor_bounds.cpp)
 endif()

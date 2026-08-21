@@ -804,6 +804,8 @@ QString ScriptExecutor::readScreenText(int row, int col, int length) const {
 
 QString ScriptExecutor::readFieldText(int row, int col) const {
     if (!m_screen) return {};
+    if (row < 0 || row >= m_screen->rows() || col < 0 || col >= m_screen->cols())
+        return {};
     return m_screen->readFieldText(row, col);
 }
 
