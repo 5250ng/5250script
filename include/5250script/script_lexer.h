@@ -19,6 +19,7 @@
 #include "script_token.h"
 #include <QHash>
 #include <QString>
+#include <QStringList>
 
 namespace core::scripting {
 
@@ -32,9 +33,18 @@ class ScriptLexer {
     // Tokenize a single line (1-based lineNumber for error reporting)
     TokenLine tokenizeLine(const QString &line, int lineNumber);
 
+    // Keyword spelling (upper-case) -> token type, as recognised by the lexer.
+    // Keywords also match in all-lowercase; mixed case is rejected.
+    const QHash<QString, TokenType> &keywords() const { return m_keywords; }
+
+    // Every KEY_* character constant the lexer accepts (KEY_A, KEY_0,
+    // KEY_SPACE, ...), in a stable order.
+    static QStringList keyCharNames();
+
   private:
     void initKeywords();
     ScriptToken nextToken(const QString &line, int &pos, int lineNumber);
+    ScriptToken readToken(const QString &line, int &pos, int lineNumber);
     ScriptToken readStringLiteral(const QString &line, int &pos, int lineNumber);
     ScriptToken readNumber(const QString &line, int &pos, int lineNumber);
     ScriptToken readVariable(const QString &line, int &pos, int lineNumber);

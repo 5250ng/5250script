@@ -96,10 +96,14 @@ struct ScriptToken {
     QString value;       // Raw text of the token
     int line = 0;        // 1-based line number
     int column = 0;      // 1-based column
+    // Number of source characters the token spans, starting at column.
+    // Differs from value.length() for string literals (quotes and escapes
+    // are stripped from value) and for keywords (value is upper-cased).
+    int length = 0;
 
     ScriptToken() = default;
-    ScriptToken(TokenType t, const QString &v, int l, int c)
-        : type(t), value(v), line(l), column(c) {}
+    ScriptToken(TokenType t, const QString &v, int l, int c, int len = 0)
+        : type(t), value(v), line(l), column(c), length(len) {}
 };
 
 using TokenLine = QVector<ScriptToken>;
