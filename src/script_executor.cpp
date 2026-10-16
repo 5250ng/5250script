@@ -36,6 +36,13 @@ void ScriptExecutor::setInitialVariables(const QHash<QString, QString> &vars) {
     m_initialVariables = vars;
 }
 
+void ScriptExecutor::setDefaults(const ExecutionDefaults &defaults) {
+    m_defaults.expectTimeoutMs = std::max(0, defaults.expectTimeoutMs);
+    m_defaults.actionDelayMs = std::max(0, defaults.actionDelayMs);
+    m_defaults.jitterMinMs = std::max(0, std::min(defaults.jitterMinMs, defaults.jitterMaxMs));
+    m_defaults.jitterMaxMs = std::max(0, std::max(defaults.jitterMinMs, defaults.jitterMaxMs));
+}
+
 void ScriptExecutor::execute(const ParseResult &parseResult) {
     if (m_running) return;
 
@@ -45,10 +52,10 @@ void ScriptExecutor::execute(const ParseResult &parseResult) {
     m_execStack.clear();
     m_onTimeoutLabel.clear();
     m_onErrorLabel.clear();
-    m_timeout = 30000;
-    m_actionDelay = 0;
-    m_jitterMin = 0;
-    m_jitterMax = 0;
+    m_timeout = m_defaults.expectTimeoutMs;
+    m_actionDelay = m_defaults.actionDelayMs;
+    m_jitterMin = m_defaults.jitterMinMs;
+    m_jitterMax = m_defaults.jitterMaxMs;
     m_waitingForUnlock = false;
     m_expectActive = false;
     m_functions = parseResult.functions;

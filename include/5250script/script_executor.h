@@ -26,6 +26,15 @@
 
 namespace core::scripting {
 
+// Execution settings every script starts with. A script's own GLOBAL
+// EXPECT_TIMEOUT / DELAY / JITTER commands override them for that run.
+struct ExecutionDefaults {
+    int expectTimeoutMs = 30000;  // EXPECT timeout
+    int actionDelayMs = 0;        // fixed delay between actions
+    int jitterMinMs = 0;          // random delay between actions, min..max
+    int jitterMaxMs = 0;          // 0 disables jitter
+};
+
 class ScriptExecutor : public QObject {
     Q_OBJECT
 
@@ -38,6 +47,12 @@ class ScriptExecutor : public QObject {
     void stop();
     bool isRunning() const { return m_running; }
     void setInitialVariables(const QHash<QString, QString> &vars);
+
+    // Starting execution settings, applied at the start of every execute().
+    // Negative values are treated as 0 and a jitter range given as
+    // max < min is swapped.
+    void setDefaults(const ExecutionDefaults &defaults);
+    ExecutionDefaults defaults() const { return m_defaults; }
 
   signals:
     // Key injection — connect these to MainWindow lambdas that synthesize QKeyEvents
@@ -74,6 +89,7 @@ class ScriptExecutor : public QObject {
     int m_actionDelay = 0;       // Global fixed delay in ms (GLOBAL DELAY)
     int m_jitterMin = 0;         // Global random delay min in ms (GLOBAL JITTER)
     int m_jitterMax = 0;         // Global random delay max in ms (GLOBAL JITTER)
+    ExecutionDefaults m_defaults;  // starting values for the four above
 
     // Function call stack
     struct CallFrame {
