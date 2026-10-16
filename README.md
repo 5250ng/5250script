@@ -17,7 +17,13 @@
     + [x] `EXTRACT` data from screen text, fields, cursor position, and rows.
     + [x] `MOVE CURSOR` with absolute coordinates, field index, or directional movement.
  - [x] Variable system with `SET`, `INC`, `DEC`, `ADD`, and string interpolation.
- - [x] Built-in variables: `$TITLE`, `$CURSOR_ROW`, `$CURSOR_COL`, `$KEYBOARD_STATE`, `$MESSAGE_WAITING`, `$EXPECT_RESULT`.
+ - [x] Built-in variables set by the executor:
+    + [x] `$SCREEN_ROWS`, `$SCREEN_COLS`: screen size.
+    + [x] `$CURSOR_ROW`, `$CURSOR_COL`: cursor position (1-based).
+    + [x] `$KEYBOARD_STATE`: `UNLOCKED`, `LOCKED`, `ERRORLOCKED` or `SYSTEMREQUEST`.
+    + [x] `$MESSAGE_WAITING`: `1` when the message-waiting indicator is on, otherwise `0`.
+    + [x] `$EXPECT_RESULT`: `OK` or `TIMEOUT` for the last `EXPECT`.
+    + [x] `$REPEAT_INDEX`: current iteration of the innermost `REPEAT`, starting at `0`.
  - [x] Control flow:
     + [x] `IF`/`ELSE`/`ENDIF` conditionals with `==`, `!=`, `<`, `>`, `<=`, `>=`, `CONTAINS`, `ISSET`.
     + [x] Compound conditions with `AND`, `OR`, `NOT`, and parenthesized grouping.
