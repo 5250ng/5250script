@@ -29,6 +29,7 @@
  - [x] Utility commands: `LOG`, `PAUSE`, `INPUT`, `ABORT`.
  - [x] Script metadata via comments (`# @script.name`, `# @script.author`, `# @menu.path`).
  - [x] Abstract `ScreenInterface` for integration with any Qt-based host application.
+ - [x] Editor support: token classification for syntax colouring, context-aware completion, linting, and formatting.
  - [x] Comprehensive test suite with 160+ test cases.
 
 ## Usage
@@ -78,6 +79,38 @@ connect(&executor, &ScriptExecutor::executionFinished,
 
 // 5. Execute
 executor.execute(result);
+```
+
+### Editor support
+
+The editor helpers only need Qt Core and reuse the lexer and parser, so an
+editor built on them accepts exactly what the executor runs.
+
+```cpp
+#include <5250script/script_completion.h>
+#include <5250script/script_formatter.h>
+#include <5250script/script_language.h>
+#include <5250script/script_linter.h>
+
+using namespace core::scripting;
+
+// Syntax colouring: classify each token of a line. ScriptToken::column and
+// ::length give the exact source span; comments start at commentStart().
+ScriptLexer lexer;
+TokenLine tokens = lexer.tokenizeLine(lineText, lineNumber);
+QVector<language::TokenCategory> categories = language::classifyLine(tokens, lineText);
+int commentAt = language::commentStart(lineText);
+
+// Completion at a cursor (1-based line, 0-based column): replace the text
+// from replaceStart to the cursor with the chosen item's insertText.
+CompletionResult completion = complete(scriptText, line, column);
+
+// Problems: parser errors plus unused-variable and unreachable-code warnings
+for (const Diagnostic &d : lint(scriptText))
+    qDebug() << d.line << d.column << d.length << d.message;
+
+// Re-indent blocks and strip trailing whitespace
+QString formatted = formatScript(scriptText);
 ```
 
 ### Script Language

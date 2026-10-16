@@ -58,6 +58,10 @@ class TestScriptLexer : public QObject {
 
     // Compound condition tokens
     void testOrAndThenTokens();
+
+    // Source spans (column + length) for editors
+    void testTokenLengths();
+    void testKeyCharNames();
     void testMixedCaseKeywordRejected();
     void testAllLowercaseKeywordsAccepted();
 
@@ -509,6 +513,45 @@ void TestScriptLexer::testAllLowercaseKeywordsAccepted() {
     QCOMPARE(tl[3].type, TokenType::OR);
     QCOMPARE(tl[4].type, TokenType::AND);
     QCOMPARE(tl[5].type, TokenType::THEN);
+}
+
+void TestScriptLexer::testTokenLengths() {
+    const QString line = QStringLiteral("  IF $user == \"a\\\"b\" AND KEY_SPACE <= -12");
+    TokenLine tl = m_lexer->tokenizeLine(line, 1);
+    QCOMPARE(tl.size(), 8);
+    // Every token's span must reproduce its exact source text
+    const QStringList expected = {"IF", "$user", "==", "\"a\\\"b\"", "AND", "KEY_SPACE", "<=", "-12"};
+    for (int i = 0; i < expected.size(); ++i)
+        QCOMPARE(line.mid(tl[i].column - 1, tl[i].length), expected[i]);
+    QCOMPARE(tl[3].value, QString("a\"b"));  // value is unescaped, span is not
+
+    // Lower-case keywords keep their source span while value is upper-cased
+    tl = m_lexer->tokenizeLine(QStringLiteral("press enter"), 1);
+    QCOMPARE(tl[1].value, QString("ENTER"));
+    QCOMPARE(tl[1].length, 5);
+
+    // TYPE / LOG / ABORT read their argument outside the general loop
+    tl = m_lexer->tokenizeLine(QStringLiteral("TYPE \"hi\""), 1);
+    QCOMPARE(tl[1].length, 4);
+    tl = m_lexer->tokenizeLine(QStringLiteral("LOG plain message   # note"), 1);
+    QCOMPARE(tl[1].column, 5);
+    QCOMPARE(tl[1].length, 13);
+    tl = m_lexer->tokenizeLine(QStringLiteral("ABORT \"no"), 1);
+    QCOMPARE(tl[1].type, TokenType::UNKNOWN);  // unterminated
+    QCOMPARE(tl[1].length, 3);
+}
+
+void TestScriptLexer::testKeyCharNames() {
+    const QStringList names = ScriptLexer::keyCharNames();
+    QCOMPARE(names.first(), QString("KEY_A"));
+    QVERIFY(names.contains("KEY_9"));
+    QVERIFY(names.contains("KEY_SPACE"));
+    QVERIFY(names.contains("KEY_BRACE_RIGHT"));
+    // Every listed name is accepted by the lexer
+    for (const QString &name : names) {
+        const TokenLine tl = m_lexer->tokenizeLine("PRESS " + name, 1);
+        QVERIFY2(tl.size() == 2 && tl[1].type == TokenType::KEY_CHAR, qPrintable(name));
+    }
 }
 
 QTEST_MAIN(TestScriptLexer)

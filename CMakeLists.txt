@@ -17,6 +17,11 @@ set(LIB_HEADERS
     include/5250script/script_executor.h
     include/5250script/script_compiler.h
     include/5250script/script_utils.h
+    include/5250script/script_language.h
+    include/5250script/script_symbols.h
+    include/5250script/script_completion.h
+    include/5250script/script_linter.h
+    include/5250script/script_formatter.h
 )
 
 set(LIB_SOURCES
@@ -25,6 +30,11 @@ set(LIB_SOURCES
     src/script_executor.cpp
     src/script_compiler.cpp
     src/script_utils.cpp
+    src/script_language.cpp
+    src/script_symbols.cpp
+    src/script_completion.cpp
+    src/script_linter.cpp
+    src/script_formatter.cpp
 )
 
 add_library(5250script STATIC ${LIB_SOURCES} ${LIB_HEADERS})
@@ -53,4 +63,8 @@ if(BUILD_5250SCRIPT_TESTS)
 
     add_5250script_test(test_script_lexer tests/test_script_lexer.cpp)
     add_5250script_test(test_script_parser tests/test_script_parser.cpp)
+    add_5250script_test(test_script_language tests/test_script_language.cpp)
+    add_5250script_test(test_script_completion tests/test_script_completion.cpp)
+    add_5250script_test(test_script_linter tests/test_script_linter.cpp)
+    add_5250script_test(test_script_formatter tests/test_script_formatter.cpp)
 endif()
