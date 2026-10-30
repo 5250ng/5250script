@@ -233,7 +233,10 @@ void ScriptExecutor::executeNode(const std::shared_ptr<ASTNode> &node) {
     }
 
     case NodeType::LocalKey: {
-        // Map local key names to Qt key events
+        // Map local key names to Qt key events. The chords must match the
+        // host's default key bindings (5250ng: core::KeyboardMapping), which
+        // resolve them back to the local action; tests/unit/
+        // test_script_local_keys.cpp there checks every key round-trips.
         int qtKey = 0;
         Qt::KeyboardModifiers mods = Qt::NoModifier;
         const QString &name = node->stringValue;
@@ -245,14 +248,14 @@ void ScriptExecutor::executeNode(const std::shared_ptr<ASTNode> &node) {
         else if (name == "INSERT")    { qtKey = Qt::Key_Insert; }
         else if (name == "HOME")      { qtKey = Qt::Key_Home; }
         else if (name == "END")       { qtKey = Qt::Key_End; }
-        else if (name == "ESC")       { qtKey = Qt::Key_Escape; }
-        else if (name == "FIELDPLUS") { qtKey = Qt::Key_Plus; mods = Qt::KeypadModifier; }
-        else if (name == "FIELDMINUS"){ qtKey = Qt::Key_Minus; mods = Qt::KeypadModifier; }
-        else if (name == "FIELDEXIT") { qtKey = Qt::Key_Return; mods = Qt::ControlModifier; }
-        else if (name == "DUP")       { qtKey = Qt::Key_D; mods = Qt::ControlModifier; }
-        else if (name == "ERASEINPUT"){ qtKey = Qt::Key_A; mods = Qt::ControlModifier | Qt::ShiftModifier; }
-        else if (name == "ERASEFIELD"){ qtKey = Qt::Key_Delete; mods = Qt::ControlModifier; }
-        else if (name == "ERASEEOF")  { qtKey = Qt::Key_E; mods = Qt::ControlModifier; }
+        else if (name == "ESC" || name == "ESCAPE") { qtKey = Qt::Key_Escape; }
+        else if (name == "FIELDPLUS") { qtKey = Qt::Key_Plus; mods = Qt::AltModifier; }
+        else if (name == "FIELDMINUS"){ qtKey = Qt::Key_Minus; mods = Qt::AltModifier; }
+        else if (name == "FIELDEXIT") { qtKey = Qt::Key_End; mods = Qt::ControlModifier; }
+        else if (name == "DUP")       { qtKey = Qt::Key_Insert; mods = Qt::ShiftModifier; }
+        else if (name == "ERASEINPUT"){ qtKey = Qt::Key_Delete; mods = Qt::AltModifier; }
+        else if (name == "ERASEFIELD"){ qtKey = Qt::Key_Backspace; mods = Qt::ControlModifier; }
+        else if (name == "ERASEEOF")  { qtKey = Qt::Key_Delete; mods = Qt::ControlModifier; }
 
         if (qtKey != 0)
             emit injectKeyPress(qtKey, mods, QString());
