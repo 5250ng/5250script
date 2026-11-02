@@ -20,6 +20,7 @@
 #include "script_ast.h"
 #include <QHash>
 #include <QObject>
+#include <QSet>
 #include <QTimer>
 #include <QVariant>
 #include <functional>
@@ -70,7 +71,10 @@ class ScriptExecutor : public QObject {
     void executionError(int line, const QString &message);
     void logMessage(const QString &message);
     void pauseRequested();
-    void inputRequested(const QStringList &labels, const QStringList &varNames);
+    // masked[i] is true for INPUT PASSWORD prompts: the host should hide what
+    // the user types in that field.
+    void inputRequested(const QStringList &labels, const QStringList &varNames,
+                        const QList<bool> &masked);
 
   public slots:
     void resumeAfterPause();
@@ -94,6 +98,7 @@ class ScriptExecutor : public QObject {
     // Function call stack
     struct CallFrame {
         QHash<QString, QString> savedVariables;  // pre-call values of parameters
+        QSet<QString> savedSecrets;              // which of them were secret
         QVector<QString> paramNames;             // to know which to restore
         int execStackDepth;                      // m_execStack.size() at call time
     };
@@ -114,8 +119,16 @@ class ScriptExecutor : public QObject {
     QHash<QString, QString> m_variables;
     QHash<QString, QString> m_initialVariables;
     QString resolveVariable(const QString &name) const;
-    void setVariable(const QString &name, const QString &value);
-    QString interpolateVariables(const QString &text) const;
+    void setVariable(const QString &name, const QString &value, bool secret = false);
+    // usedSecret is set when the text references a secret variable.
+    QString interpolateVariables(const QString &text, bool *usedSecret = nullptr) const;
+    // For LOG and ABORT messages: secret variables are replaced by a mask.
+    QString interpolateMessage(const QString &text) const;
+    QString interpolate(const QString &text, bool maskSecrets, bool *usedSecret) const;
+
+    // Variables holding INPUT PASSWORD values, or values derived from them
+    QSet<QString> m_secretVariables;
+    QSet<QString> m_pendingSecretInputs;  // masked INPUT targets awaiting resume
 
     // Current node execution
     void executeNode(const std::shared_ptr<ASTNode> &node);

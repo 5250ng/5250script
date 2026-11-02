@@ -214,6 +214,7 @@ void ScriptLexer::initKeywords() {
     m_keywords["JITTER"]          = TokenType::JITTER;
     m_keywords["EXPECT_TIMEOUT"]  = TokenType::EXPECT_TIMEOUT;
     m_keywords["ISSET"]           = TokenType::ISSET;
+    m_keywords["PASSWORD"]        = TokenType::PASSWORD;
 }
 
 QVector<TokenLine> ScriptLexer::tokenize(const QString &source) {

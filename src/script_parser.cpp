@@ -357,16 +357,24 @@ std::shared_ptr<ASTNode> ScriptParser::parseLine(const TokenLine &tokens) {
     case TokenType::PAUSE:
         node->type = NodeType::Pause;
         return node;
-    case TokenType::INPUT:
+    case TokenType::INPUT: {
         node->type = NodeType::Input;
-        if (tokens.size() >= 3 && tokens[1].type == TokenType::STRING_LITERAL &&
-            tokens[2].type == TokenType::VARIABLE) {
-            node->stringValue = tokens[1].value;  // prompt label
-            node->varName = tokens[2].value;       // $variable
+        // INPUT [PASSWORD] "prompt" $var
+        int prompt = 1;
+        if (tokens.size() > 1 && tokens[1].type == TokenType::PASSWORD) {
+            node->masked = true;
+            prompt = 2;
+        }
+        if (tokens.size() >= prompt + 2 && tokens[prompt].type == TokenType::STRING_LITERAL &&
+            tokens[prompt + 1].type == TokenType::VARIABLE) {
+            node->stringValue = tokens[prompt].value;     // prompt label
+            node->varName = tokens[prompt + 1].value;     // $variable
         } else {
-            error(node->line, "INPUT requires a quoted prompt and a variable (e.g., INPUT \"Name:\" $NAME)");
+            error(node->line, "INPUT requires a quoted prompt and a variable (e.g., INPUT \"Name:\" $NAME "
+                              "or INPUT PASSWORD \"Password:\" $PASS)");
         }
         return node;
+    }
 
     default:
         // Bare function call: identifier(args...)
