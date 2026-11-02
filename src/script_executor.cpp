@@ -36,6 +36,13 @@ void ScriptExecutor::setInitialVariables(const QHash<QString, QString> &vars) {
     m_initialVariables = vars;
 }
 
+void ScriptExecutor::setDefaults(const ExecutionDefaults &defaults) {
+    m_defaults.expectTimeoutMs = std::max(0, defaults.expectTimeoutMs);
+    m_defaults.actionDelayMs = std::max(0, defaults.actionDelayMs);
+    m_defaults.jitterMinMs = std::max(0, std::min(defaults.jitterMinMs, defaults.jitterMaxMs));
+    m_defaults.jitterMaxMs = std::max(0, std::max(defaults.jitterMinMs, defaults.jitterMaxMs));
+}
+
 void ScriptExecutor::execute(const ParseResult &parseResult) {
     if (m_running) return;
 
@@ -45,10 +52,10 @@ void ScriptExecutor::execute(const ParseResult &parseResult) {
     m_execStack.clear();
     m_onTimeoutLabel.clear();
     m_onErrorLabel.clear();
-    m_timeout = 30000;
-    m_actionDelay = 0;
-    m_jitterMin = 0;
-    m_jitterMax = 0;
+    m_timeout = m_defaults.expectTimeoutMs;
+    m_actionDelay = m_defaults.actionDelayMs;
+    m_jitterMin = m_defaults.jitterMinMs;
+    m_jitterMax = m_defaults.jitterMaxMs;
     m_waitingForUnlock = false;
     m_expectActive = false;
     m_functions = parseResult.functions;
@@ -229,7 +236,10 @@ void ScriptExecutor::executeNode(const std::shared_ptr<ASTNode> &node) {
     }
 
     case NodeType::LocalKey: {
-        // Map local key names to Qt key events
+        // Map local key names to Qt key events. The chords must match the
+        // host's default key bindings (5250ng: core::KeyboardMapping), which
+        // resolve them back to the local action; tests/unit/
+        // test_script_local_keys.cpp there checks every key round-trips.
         int qtKey = 0;
         Qt::KeyboardModifiers mods = Qt::NoModifier;
         const QString &name = node->stringValue;
@@ -241,14 +251,14 @@ void ScriptExecutor::executeNode(const std::shared_ptr<ASTNode> &node) {
         else if (name == "INSERT")    { qtKey = Qt::Key_Insert; }
         else if (name == "HOME")      { qtKey = Qt::Key_Home; }
         else if (name == "END")       { qtKey = Qt::Key_End; }
-        else if (name == "ESC")       { qtKey = Qt::Key_Escape; }
-        else if (name == "FIELDPLUS") { qtKey = Qt::Key_Plus; mods = Qt::KeypadModifier; }
-        else if (name == "FIELDMINUS"){ qtKey = Qt::Key_Minus; mods = Qt::KeypadModifier; }
-        else if (name == "FIELDEXIT") { qtKey = Qt::Key_Return; mods = Qt::ControlModifier; }
-        else if (name == "DUP")       { qtKey = Qt::Key_D; mods = Qt::ControlModifier; }
-        else if (name == "ERASEINPUT"){ qtKey = Qt::Key_A; mods = Qt::ControlModifier | Qt::ShiftModifier; }
-        else if (name == "ERASEFIELD"){ qtKey = Qt::Key_Delete; mods = Qt::ControlModifier; }
-        else if (name == "ERASEEOF")  { qtKey = Qt::Key_E; mods = Qt::ControlModifier; }
+        else if (name == "ESC" || name == "ESCAPE") { qtKey = Qt::Key_Escape; }
+        else if (name == "FIELDPLUS") { qtKey = Qt::Key_Plus; mods = Qt::AltModifier; }
+        else if (name == "FIELDMINUS"){ qtKey = Qt::Key_Minus; mods = Qt::AltModifier; }
+        else if (name == "FIELDEXIT") { qtKey = Qt::Key_End; mods = Qt::ControlModifier; }
+        else if (name == "DUP")       { qtKey = Qt::Key_Insert; mods = Qt::ShiftModifier; }
+        else if (name == "ERASEINPUT"){ qtKey = Qt::Key_Delete; mods = Qt::AltModifier; }
+        else if (name == "ERASEFIELD"){ qtKey = Qt::Key_Backspace; mods = Qt::ControlModifier; }
+        else if (name == "ERASEEOF")  { qtKey = Qt::Key_Delete; mods = Qt::ControlModifier; }
 
         if (qtKey != 0)
             emit injectKeyPress(qtKey, mods, QString());

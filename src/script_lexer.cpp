@@ -15,8 +15,66 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "script_lexer.h"
+#include <QPair>
+#include <QRegularExpression>
+#include <QVector>
 
 namespace core::scripting {
+
+namespace {
+
+// KEY_<suffix> names for special characters, in the order they are listed
+// for completion. Single letters and digits (KEY_A, KEY_0) are implicit.
+const QVector<QPair<QString, QString>> &namedKeyCharList() {
+    static const QVector<QPair<QString, QString>> list = {
+        {"SPACE",         " "},
+        {"PERIOD",        "."},
+        {"COMMA",         ","},
+        {"SEMICOLON",     ";"},
+        {"COLON",         ":"},
+        {"SLASH",         "/"},
+        {"BACKSLASH",     "\\"},
+        {"MINUS",         "-"},
+        {"PLUS",          "+"},
+        {"EQUAL",         "="},
+        {"UNDERSCORE",    "_"},
+        {"QUOTE",         "'"},
+        {"DOUBLEQUOTE",   "\""},
+        {"EXCLAIM",       "!"},
+        {"QUESTION",      "?"},
+        {"AT",            "@"},
+        {"HASH",          "#"},
+        {"DOLLAR",        "$"},
+        {"PERCENT",       "%"},
+        {"CARET",         "^"},
+        {"AMPERSAND",     "&"},
+        {"ASTERISK",      "*"},
+        {"PIPE",          "|"},
+        {"TILDE",         "~"},
+        {"BACKQUOTE",     "`"},
+        {"PAREN_LEFT",    "("},
+        {"PAREN_RIGHT",   ")"},
+        {"BRACKET_LEFT",  "["},
+        {"BRACKET_RIGHT", "]"},
+        {"BRACE_LEFT",    "{"},
+        {"BRACE_RIGHT",   "}"},
+        {"LESS",          "<"},
+        {"GREATER",       ">"},
+    };
+    return list;
+}
+
+const QHash<QString, QString> &namedKeyChars() {
+    static const QHash<QString, QString> map = [] {
+        QHash<QString, QString> m;
+        for (const auto &entry : namedKeyCharList())
+            m.insert(entry.first, entry.second);
+        return m;
+    }();
+    return map;
+}
+
+} // namespace
 
 ScriptLexer::ScriptLexer() {
     initKeywords();
@@ -70,6 +128,7 @@ void ScriptLexer::initKeywords() {
     m_keywords["HOME"]       = TokenType::HOME;
     m_keywords["END"]        = TokenType::END;
     m_keywords["ESC"]        = TokenType::ESC;
+    m_keywords["ESCAPE"]     = TokenType::ESC;
     m_keywords["FIELDPLUS"]  = TokenType::FIELDPLUS;
     m_keywords["FIELDMINUS"] = TokenType::FIELDMINUS;
     m_keywords["FIELDEXIT"]  = TokenType::FIELDEXIT;
@@ -159,7 +218,8 @@ void ScriptLexer::initKeywords() {
 
 QVector<TokenLine> ScriptLexer::tokenize(const QString &source) {
     QVector<TokenLine> result;
-    const QStringList lines = source.split('\n');
+    // Split on any line ending style: \r\n (Windows), \n (Unix), \r (old Mac)
+    const QStringList lines = source.split(QRegularExpression(QStringLiteral("\\r\\n|\\r|\\n")));
     for (int i = 0; i < lines.size(); ++i) {
         TokenLine tl = tokenizeLine(lines[i], i + 1);
         if (!tl.isEmpty())
@@ -209,7 +269,8 @@ TokenLine ScriptLexer::tokenizeLine(const QString &line, int lineNumber) {
                 int hashPos = pos;
                 while (hashPos < line.length() && line[hashPos] != '#') hashPos++;
                 QString payload = line.mid(pos, hashPos - pos).trimmed();
-                tokens.append(ScriptToken(TokenType::STRING_LITERAL, payload, lineNumber, pos + 1));
+                tokens.append(ScriptToken(TokenType::STRING_LITERAL, payload, lineNumber, pos + 1,
+                                          payload.length()));
             }
         }
         return tokens;
@@ -242,6 +303,14 @@ TokenLine ScriptLexer::tokenizeLine(const QString &line, int lineNumber) {
 
 ScriptToken ScriptLexer::nextToken(const QString &line, int &pos, int lineNumber) {
     skipWhitespace(line, pos);
+    const int start = pos;
+    ScriptToken tok = readToken(line, pos, lineNumber);
+    if (tok.type != TokenType::EOF_TOKEN)
+        tok.length = pos - start;
+    return tok;
+}
+
+ScriptToken ScriptLexer::readToken(const QString &line, int &pos, int lineNumber) {
     if (pos >= line.length())
         return ScriptToken(TokenType::EOF_TOKEN, "", lineNumber, pos + 1);
 
@@ -326,6 +395,8 @@ ScriptToken ScriptLexer::readStringLiteral(const QString &line, int &pos, int li
             QChar next = line[pos + 1];
             if (next == '"') { value += '"'; pos += 2; continue; }
             if (next == 'n') { value += '\n'; pos += 2; continue; }
+            if (next == 'r') { value += '\r'; pos += 2; continue; }
+            if (next == 't') { value += '\t'; pos += 2; continue; }
             if (next == '\\') { value += '\\'; pos += 2; continue; }
         }
         value += line[pos];
@@ -335,9 +406,9 @@ ScriptToken ScriptLexer::readStringLiteral(const QString &line, int &pos, int li
         pos++; // skip closing quote
     } else {
         // Unterminated string literal — return UNKNOWN so the parser reports an error
-        return ScriptToken(TokenType::UNKNOWN, value, lineNumber, col);
+        return ScriptToken(TokenType::UNKNOWN, value, lineNumber, col, pos - (col - 1));
     }
-    return ScriptToken(TokenType::STRING_LITERAL, value, lineNumber, col);
+    return ScriptToken(TokenType::STRING_LITERAL, value, lineNumber, col, pos - (col - 1));
 }
 
 ScriptToken ScriptLexer::readNumber(const QString &line, int &pos, int lineNumber) {
@@ -402,47 +473,23 @@ QString ScriptLexer::resolveKeyChar(const QString &suffix) const {
         return suffix;
 
     // Named special characters
-    static const QHash<QString, QString> namedKeys = {
-        {"SPACE",         " "},
-        {"PERIOD",        "."},
-        {"COMMA",         ","},
-        {"SEMICOLON",     ";"},
-        {"COLON",         ":"},
-        {"SLASH",         "/"},
-        {"BACKSLASH",     "\\"},
-        {"MINUS",         "-"},
-        {"PLUS",          "+"},
-        {"EQUAL",         "="},
-        {"UNDERSCORE",    "_"},
-        {"QUOTE",         "'"},
-        {"DOUBLEQUOTE",   "\""},
-        {"EXCLAIM",       "!"},
-        {"QUESTION",      "?"},
-        {"AT",            "@"},
-        {"HASH",          "#"},
-        {"DOLLAR",        "$"},
-        {"PERCENT",       "%"},
-        {"CARET",         "^"},
-        {"AMPERSAND",     "&"},
-        {"ASTERISK",      "*"},
-        {"PIPE",          "|"},
-        {"TILDE",         "~"},
-        {"BACKQUOTE",     "`"},
-        {"PAREN_LEFT",    "("},
-        {"PAREN_RIGHT",   ")"},
-        {"BRACKET_LEFT",  "["},
-        {"BRACKET_RIGHT", "]"},
-        {"BRACE_LEFT",    "{"},
-        {"BRACE_RIGHT",   "}"},
-        {"LESS",          "<"},
-        {"GREATER",       ">"},
-    };
-
-    auto it = namedKeys.find(suffix);
-    if (it != namedKeys.end())
+    const auto &named = namedKeyChars();
+    auto it = named.find(suffix);
+    if (it != named.end())
         return it.value();
 
     return {};
+}
+
+QStringList ScriptLexer::keyCharNames() {
+    QStringList names;
+    for (QChar c = 'A'; c <= 'Z'; c = QChar(c.unicode() + 1))
+        names << QStringLiteral("KEY_") + c;
+    for (QChar c = '0'; c <= '9'; c = QChar(c.unicode() + 1))
+        names << QStringLiteral("KEY_") + c;
+    for (const auto &entry : namedKeyCharList())
+        names << QStringLiteral("KEY_") + entry.first;
+    return names;
 }
 
 void ScriptLexer::skipWhitespace(const QString &line, int &pos) {
