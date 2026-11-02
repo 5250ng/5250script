@@ -185,15 +185,17 @@ void TestScriptParser::testPressKey() {
 }
 
 void TestScriptParser::testAIDKeys() {
-    auto result = m_parser->parse("ENTER\nF1\nF12\nPAGEUP");
+    auto result = m_parser->parse("ENTER\nF1\nF12\nPAGEUP\nPAGEDOWN");
     QVERIFY(!result.hasErrors());
-    QCOMPARE(result.root->children.size(), 4);
+    QCOMPARE(result.root->children.size(), 5);
     for (const auto &child : result.root->children)
         QCOMPARE(child->type, NodeType::AIDKey);
     QCOMPARE(result.root->children[0]->aidByte, static_cast<uint8_t>(0xF1));
     QCOMPARE(result.root->children[1]->aidByte, static_cast<uint8_t>(0x31));
     QCOMPARE(result.root->children[2]->aidByte, static_cast<uint8_t>(0x3C));
-    QCOMPARE(result.root->children[3]->aidByte, static_cast<uint8_t>(0xF5));
+    // PAGEUP = Roll Down (0xF4, previous page), PAGEDOWN = Roll Up (0xF5)
+    QCOMPARE(result.root->children[3]->aidByte, static_cast<uint8_t>(0xF4));
+    QCOMPARE(result.root->children[4]->aidByte, static_cast<uint8_t>(0xF5));
 }
 
 void TestScriptParser::testLocalKeys() {
@@ -1206,13 +1208,17 @@ void TestScriptParser::testEmptyParentheses() {
 }
 
 void TestScriptParser::testIssetWithoutParentheses() {
-    // ISSET without parentheses should now be an error
+    // The documented bare ISSET $VAR form is supported alongside ISSET($VAR).
     auto result = m_parser->parse(
         "IF ISSET $var\n"
-        "    LOG \"bad\"\n"
+        "    LOG \"set\"\n"
         "ENDIF\n"
     );
-    QVERIFY(result.hasErrors());
+    QVERIFY(!result.hasErrors());
+    auto ifNode = result.root->children[0];
+    QVERIFY(ifNode->condition);
+    QCOMPARE(ifNode->condition->op, CompareOp::IsSet);
+    QCOMPARE(ifNode->condition->left, "$var");
 }
 
 QTEST_MAIN(TestScriptParser)

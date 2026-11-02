@@ -59,7 +59,7 @@ QString ScriptCompiler::aidByteToKeyword(uint8_t aidByte) {
 ScriptMetadata ScriptCompiler::extractMetadata(const QString &scriptText) {
     ScriptMetadata meta;
     static const QRegularExpression re(R"DELIM(^#\s*@([\w.]+)\s*=\s*"([^"]*)")DELIM");
-    const QStringList lines = scriptText.split('\n');
+    const QStringList lines = scriptText.split(QRegularExpression(QStringLiteral("\\r\\n|\\r|\\n")));
     for (const QString &line : lines) {
         const QString trimmed = line.trimmed();
         if (trimmed.isEmpty())
