@@ -133,6 +133,9 @@ class ScriptExecutor : public QObject {
     // Current node execution
     void executeNode(const std::shared_ptr<ASTNode> &node);
     void scheduleNextStep(int delayMs = 0);
+    bool keyboardLocked() const;
+    bool keyboardLockedByInput(bool lockedBefore);
+    void injectText(const QString &text);
 
     // EXPECT implementation
     void startExpect(const std::shared_ptr<ASTNode> &node);
@@ -161,6 +164,9 @@ class ScriptExecutor : public QObject {
 
     // AID key unlock waiting
     bool m_waitingForUnlock = false;
+    // Rest of a TYPE statement held back while an auto-enter it triggered
+    // waits for the host
+    QString m_pendingText;
 
     // Screen interface reference (implemented by host application)
     ScreenInterface *m_screen = nullptr;

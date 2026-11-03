@@ -17,6 +17,7 @@
 #include "script_executor.h"
 #include <QRandomGenerator>
 #include <algorithm>
+#include <utility>
 
 namespace core::scripting {
 
@@ -59,6 +60,7 @@ void ScriptExecutor::execute(const ParseResult &parseResult) {
     m_jitterMin = m_defaults.jitterMinMs;
     m_jitterMax = m_defaults.jitterMaxMs;
     m_waitingForUnlock = false;
+    m_pendingText.clear();
     m_expectActive = false;
     m_functions = parseResult.functions;
     m_callStack.clear();
@@ -85,6 +87,7 @@ void ScriptExecutor::stop() {
     m_expectTimer.stop();
     m_expectActive = false;
     m_waitingForUnlock = false;
+    m_pendingText.clear();
     m_execStack.clear();
     m_callStack.clear();
     emit executionFinished();
@@ -128,6 +131,8 @@ void ScriptExecutor::notifyTerminalStateChanged() {
         } else if (ks == ScreenInterface::KeyboardState::ErrorLocked) {
             // Terminal entered error-locked state — trigger ON ERROR handler if set
             m_waitingForUnlock = false;
+            // The rest of an interrupted TYPE belongs to the screen that failed
+            m_pendingText.clear();
             if (!m_onErrorLabel.isEmpty()) {
                 // If the error happened inside a function, exit the function first
                 // so that gotoLabel (which only accepts top-level labels) can dispatch.
@@ -163,9 +168,46 @@ void ScriptExecutor::scheduleNextStep(int delayMs) {
         QTimer::singleShot(0, this, &ScriptExecutor::executeStep);
 }
 
+bool ScriptExecutor::keyboardLocked() const {
+    return m_screen && m_screen->keyboardState() == ScreenInterface::KeyboardState::Locked;
+}
+
+// A key that fills or leaves an auto-enter field sends the screen to the
+// host and locks the keyboard, like an AID key. Returns true, and waits for
+// notifyTerminalStateChanged() to resume, when the key just injected locked
+// a keyboard that was unlocked before it (`lockedBefore` false).
+bool ScriptExecutor::keyboardLockedByInput(bool lockedBefore) {
+    if (lockedBefore || !keyboardLocked())
+        return false;
+    m_waitingForUnlock = true;
+    return true;
+}
+
+// Types `text` one key at a time, holding the rest back in m_pendingText
+// when a key locks the keyboard.
+void ScriptExecutor::injectText(const QString &text) {
+    for (qsizetype i = 0; i < text.size(); ++i) {
+        const bool lockedBefore = keyboardLocked();
+        emit injectKeyPress(0, Qt::NoModifier, QString(text.at(i)));
+        if (!m_running)
+            return;
+        if (keyboardLockedByInput(lockedBefore)) {
+            m_pendingText = text.mid(i + 1);
+            return;
+        }
+    }
+    scheduleNextStep(10);
+}
+
 void ScriptExecutor::executeStep() {
     if (!m_running) return;
     if (m_waitingForUnlock || m_expectActive) return;
+
+    // Finish a TYPE statement interrupted by an auto-enter
+    if (!m_pendingText.isEmpty()) {
+        injectText(std::exchange(m_pendingText, QString()));
+        return;
+    }
 
     // Find next node to execute
     while (!m_execStack.isEmpty()) {
@@ -213,20 +255,17 @@ void ScriptExecutor::executeNode(const std::shared_ptr<ASTNode> &node) {
         scheduleNextStep();
         break;
 
-    case NodeType::TypeInput: {
-        QString text = interpolateVariables(node->stringValue);
-        for (const QChar &ch : text) {
-            emit injectKeyPress(0, Qt::NoModifier, QString(ch));
-        }
-        scheduleNextStep(10);
+    case NodeType::TypeInput:
+        injectText(interpolateVariables(node->stringValue));
         break;
-    }
 
     case NodeType::CharInput: {
         QString text = interpolateVariables(node->stringValue);
+        const bool lockedBefore = keyboardLocked();
         if (!text.isEmpty())
             emit injectKeyPress(0, Qt::NoModifier, text.left(1));
-        scheduleNextStep(10);
+        if (!keyboardLockedByInput(lockedBefore))
+            scheduleNextStep(10);
         break;
     }
 
@@ -263,9 +302,11 @@ void ScriptExecutor::executeNode(const std::shared_ptr<ASTNode> &node) {
         else if (name == "ERASEFIELD"){ qtKey = Qt::Key_Backspace; mods = Qt::ControlModifier; }
         else if (name == "ERASEEOF")  { qtKey = Qt::Key_Delete; mods = Qt::ControlModifier; }
 
+        const bool lockedBefore = keyboardLocked();
         if (qtKey != 0)
             emit injectKeyPress(qtKey, mods, QString());
-        scheduleNextStep(10);
+        if (!keyboardLockedByInput(lockedBefore))
+            scheduleNextStep(10);
         break;
     }
 
