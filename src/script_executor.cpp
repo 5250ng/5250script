@@ -722,7 +722,14 @@ bool ScriptExecutor::evaluateConditionNode(const ConditionNode &node) const {
 
 QString ScriptExecutor::resolveVariable(const QString &name) const {
     // name includes the $ prefix
-    return m_variables.value(name, "0");
+    auto it = m_variables.constFind(name);
+    if (it != m_variables.constEnd())
+        return it.value();
+    // An undefined variable reads as 0 so counters work without a SET. A
+    // $SESSION_* variable is text from the session profile (user name,
+    // password, ...) that the user left blank: it reads as empty text, so
+    // TYPE "$SESSION_PASSWORD" types nothing rather than "0".
+    return name.startsWith(QLatin1String("$SESSION_")) ? QString() : QStringLiteral("0");
 }
 
 void ScriptExecutor::setVariable(const QString &name, const QString &value, bool secret) {
