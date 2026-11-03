@@ -58,7 +58,11 @@ QString ScriptCompiler::aidByteToKeyword(uint8_t aidByte) {
 
 ScriptMetadata ScriptCompiler::extractMetadata(const QString &scriptText) {
     ScriptMetadata meta;
-    static const QRegularExpression re(R"DELIM(^#\s*@([\w.]+)\s*=\s*"([^"]*)")DELIM");
+    static const QRegularExpression re(R"DELIM(^#\s*@([\w.]+)\s*=\s*"((?:[^"\\]++|\\.)*+)")DELIM");
+    // Scripts written before values were escaped can end a value with a
+    // lone backslash ("C:\"); read those the old way.
+    static const QRegularExpression unescapedRe(R"DELIM(^#\s*@([\w.]+)\s*=\s*"([^"]*)")DELIM");
+    static const QRegularExpression escapeRe(QStringLiteral(R"(\\(["\\]))"));
     const QStringList lines = scriptText.split(QRegularExpression(QStringLiteral("\\r\\n|\\r|\\n")));
     for (const QString &line : lines) {
         const QString trimmed = line.trimmed();
@@ -67,10 +71,24 @@ ScriptMetadata ScriptCompiler::extractMetadata(const QString &scriptText) {
         if (!trimmed.startsWith('#'))
             break;
         auto match = re.match(trimmed);
+        if (match.hasMatch()) {
+            QString value = match.captured(2);
+            value.replace(escapeRe, QStringLiteral("\\1"));
+            meta.values.insert(match.captured(1), value);
+            continue;
+        }
+        match = unescapedRe.match(trimmed);
         if (match.hasMatch())
             meta.values.insert(match.captured(1), match.captured(2));
     }
     return meta;
+}
+
+QString ScriptCompiler::quoteMetadataValue(const QString &value) {
+    QString escaped = value;
+    escaped.replace('\\', QStringLiteral("\\\\"));
+    escaped.replace('"', QStringLiteral("\\\""));
+    return '"' + escaped + '"';
 }
 
 } // namespace core::scripting
