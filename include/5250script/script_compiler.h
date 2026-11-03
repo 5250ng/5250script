@@ -35,7 +35,12 @@ struct ScriptMetadata {
 class ScriptCompiler {
   public:
     static QString aidByteToKeyword(uint8_t aidByte);
+    /// Parses the leading "# @key = \"value\"" comment lines. Inside the
+    /// quotes, \" stands for a quote and \\ for a backslash.
     static ScriptMetadata extractMetadata(const QString &scriptText);
+    /// Returns value as a quoted metadata value that extractMetadata()
+    /// reads back unchanged.
+    static QString quoteMetadataValue(const QString &value);
 };
 
 } // namespace core::scripting
