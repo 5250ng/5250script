@@ -49,6 +49,8 @@ void ScriptExecutor::execute(const ParseResult &parseResult) {
     m_parseResult = parseResult;
     m_running = true;
     m_variables.clear();
+    m_secretVariables.clear();
+    m_pendingSecretInputs.clear();
     m_execStack.clear();
     m_onTimeoutLabel.clear();
     m_onErrorLabel.clear();
@@ -96,8 +98,9 @@ void ScriptExecutor::resumeAfterPause() {
 void ScriptExecutor::resumeAfterInput(const QStringList &varNames, const QStringList &values) {
     if (!m_running) return;
     for (int i = 0; i < varNames.size() && i < values.size(); ++i) {
-        setVariable(varNames[i], values[i]);
+        setVariable(varNames[i], values[i], m_pendingSecretInputs.contains(varNames[i]));
     }
+    m_pendingSecretInputs.clear();
     scheduleNextStep();
 }
 
@@ -322,8 +325,9 @@ void ScriptExecutor::executeNode(const std::shared_ptr<ASTNode> &node) {
         break;
 
     case NodeType::Set: {
-        QString value = interpolateVariables(node->stringValue);
-        setVariable(node->varName, value);
+        bool secret = false;
+        QString value = interpolateVariables(node->stringValue, &secret);
+        setVariable(node->varName, value, secret);
         scheduleNextStep();
         break;
     }
@@ -418,11 +422,14 @@ void ScriptExecutor::executeNode(const std::shared_ptr<ASTNode> &node) {
         for (const QString &param : func->paramNames) {
             if (m_variables.contains(param))
                 frame.savedVariables[param] = m_variables[param];
+            if (m_secretVariables.contains(param))
+                frame.savedSecrets.insert(param);
         }
         // Bind arguments to parameters
         for (int i = 0; i < func->paramNames.size(); ++i) {
-            QString argVal = interpolateVariables(node->argValues[i]);
-            setVariable(func->paramNames[i], argVal);
+            bool secret = false;
+            QString argVal = interpolateVariables(node->argValues[i], &secret);
+            setVariable(func->paramNames[i], argVal, secret);
         }
         m_callStack.append(frame);
         m_execStack.append({&func->children, 0, 0, 0});
@@ -467,14 +474,14 @@ void ScriptExecutor::executeNode(const std::shared_ptr<ASTNode> &node) {
 
     case NodeType::Abort:
         if (!node->stringValue.isEmpty()) {
-            QString msg = interpolateVariables(node->stringValue);
+            QString msg = interpolateMessage(node->stringValue);
             emit executionError(node->line, msg);
         }
         stop();
         break;
 
     case NodeType::Log: {
-        QString msg = interpolateVariables(node->stringValue);
+        QString msg = interpolateMessage(node->stringValue);
         emit logMessage(msg);
         scheduleNextStep();
         break;
@@ -489,8 +496,10 @@ void ScriptExecutor::executeNode(const std::shared_ptr<ASTNode> &node) {
         // Batch consecutive INPUT nodes into a single dialog
         QStringList labels;
         QStringList varNames;
+        QList<bool> masked;
         labels.append(node->stringValue);
         varNames.append(node->varName);
+        masked.append(node->masked);
 
         // Look ahead for more consecutive INPUT nodes in the current frame
         if (!m_execStack.isEmpty()) {
@@ -500,11 +509,17 @@ void ScriptExecutor::executeNode(const std::shared_ptr<ASTNode> &node) {
                 if (nextNode->type != NodeType::Input) break;
                 labels.append(nextNode->stringValue);
                 varNames.append(nextNode->varName);
+                masked.append(nextNode->masked);
                 frame.index++;
             }
         }
 
-        emit inputRequested(labels, varNames);
+        m_pendingSecretInputs.clear();
+        for (int i = 0; i < varNames.size(); ++i) {
+            if (masked[i])
+                m_pendingSecretInputs.insert(varNames[i]);
+        }
+        emit inputRequested(labels, varNames, masked);
         // Don't schedule next step — resumeAfterInput() will do it
         break;
     }
@@ -710,11 +725,24 @@ QString ScriptExecutor::resolveVariable(const QString &name) const {
     return m_variables.value(name, "0");
 }
 
-void ScriptExecutor::setVariable(const QString &name, const QString &value) {
+void ScriptExecutor::setVariable(const QString &name, const QString &value, bool secret) {
     m_variables[name] = value;
+    if (secret)
+        m_secretVariables.insert(name);
+    else
+        m_secretVariables.remove(name);
 }
 
-QString ScriptExecutor::interpolateVariables(const QString &text) const {
+QString ScriptExecutor::interpolateVariables(const QString &text, bool *usedSecret) const {
+    return interpolate(text, false, usedSecret);
+}
+
+QString ScriptExecutor::interpolateMessage(const QString &text) const {
+    return interpolate(text, true, nullptr);
+}
+
+QString ScriptExecutor::interpolate(const QString &text, bool maskSecrets, bool *usedSecret) const {
+    if (usedSecret) *usedSecret = false;
     QString result;
     int i = 0;
     while (i < text.length()) {
@@ -733,7 +761,10 @@ QString ScriptExecutor::interpolateVariables(const QString &text) const {
                     result += '$';
                 } else {
                     QString varName = text.mid(start, i - start);
-                    result += resolveVariable(varName);
+                    const bool secret = m_secretVariables.contains(varName);
+                    if (secret && usedSecret) *usedSecret = true;
+                    result += (secret && maskSecrets) ? QStringLiteral("********")
+                                                      : resolveVariable(varName);
                 }
             }
         } else {
@@ -785,9 +816,10 @@ void ScriptExecutor::returnFromFunction() {
     // Restore saved parameter variables
     for (const QString &param : frame.paramNames) {
         if (frame.savedVariables.contains(param)) {
-            m_variables[param] = frame.savedVariables[param];
+            setVariable(param, frame.savedVariables[param], frame.savedSecrets.contains(param));
         } else {
             m_variables.remove(param);
+            m_secretVariables.remove(param);
         }
     }
 }

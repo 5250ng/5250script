@@ -129,6 +129,8 @@ QVector<CompletionItem> candidates(const QStringList &words, const ScriptSymbols
         else if (n == 3 && up[2] == "CURSOR") kw({"ROW", "COL"});
         else if (n == 3 && up[2] == "FIELD") kw({"AT"});
         else if (n == 5 && up[2] == "FROM") kw({"LENGTH"});
+    } else if (cmd == "INPUT") {
+        if (n == 1) kw({"PASSWORD"});
     } else if (cmd == "GLOBAL") {
         if (n == 1) kw({"EXPECT_TIMEOUT", "DELAY", "JITTER"});
     } else if (cmd == "ON") {

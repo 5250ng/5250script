@@ -33,6 +33,7 @@
  - [x] Error handling with `ON TIMEOUT GOTO` and `ON ERROR GOTO`.
  - [x] Timing control with `WAIT`, `GLOBAL DELAY`, `GLOBAL JITTER`, and `GLOBAL EXPECT_TIMEOUT`.
  - [x] Utility commands: `LOG`, `PAUSE`, `INPUT`, `ABORT`.
+    + [x] `INPUT PASSWORD "Password:" $PASS` asks for a secret: `inputRequested` flags the field as masked, and `LOG`/`ABORT` messages show `********` for that variable (and for values built from it) while `TYPE` sends the real value.
  - [x] Script metadata via comments (`# @script.name`, `# @script.author`, `# @menu.path`).
  - [x] Abstract `ScreenInterface` for integration with any Qt-based host application.
  - [x] Editor support: token classification for syntax colouring, context-aware completion, linting, and formatting.

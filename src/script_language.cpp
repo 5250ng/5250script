@@ -68,7 +68,7 @@ TokenCategory categoryOf(TokenType type) {
     case TokenType::COL: case TokenType::LINE: case TokenType::UP:
     case TokenType::DOWN: case TokenType::LEFT: case TokenType::RIGHT:
     case TokenType::DELAY: case TokenType::JITTER: case TokenType::EXPECT_TIMEOUT:
-    case TokenType::ISSET:
+    case TokenType::ISSET: case TokenType::PASSWORD:
         return TokenCategory::SubKeyword;
 
     case TokenType::OP_EQ: case TokenType::OP_NE: case TokenType::OP_LT:

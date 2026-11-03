@@ -118,6 +118,8 @@ void TestScriptCompletion::testExtractGlobalOn() {
     QCOMPARE(labelsAt("EXTRACT $v CURSOR |"), (QStringList{"ROW", "COL"}));
     QCOMPARE(labelsAt("EXTRACT $v FROM 1 2 |"), QStringList{"LENGTH"});
     QCOMPARE(labelsAt("GLOBAL |"), (QStringList{"EXPECT_TIMEOUT", "DELAY", "JITTER"}));
+    QCOMPARE(labelsAt("INPUT |"), QStringList{"PASSWORD"});
+    QVERIFY(labelsAt("INPUT PASSWORD |").isEmpty());
     QCOMPARE(labelsAt("ON |"), (QStringList{"TIMEOUT", "ERROR"}));
     QCOMPARE(labelsAt("ON TIMEOUT |"), QStringList{"GOTO"});
 }

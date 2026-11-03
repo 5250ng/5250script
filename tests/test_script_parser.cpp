@@ -83,6 +83,7 @@ class TestScriptParser : public QObject {
     void testIfContains();
     void testInput();
     void testInputMultiple();
+    void testInputPassword();
     void testIfIsset();
     void testWhileIsset();
 
@@ -894,6 +895,27 @@ void TestScriptParser::testInputMultiple() {
     QCOMPARE(result.root->children[1]->varName, "$PASS");
     QCOMPARE(result.root->children[2]->stringValue, "Library:");
     QCOMPARE(result.root->children[2]->varName, "$LIB");
+}
+
+void TestScriptParser::testInputPassword() {
+    auto result = m_parser->parse(
+        "INPUT PASSWORD \"Password:\" $PASS\n"
+        "input password \"PIN:\" $PIN\n"
+        "INPUT \"User:\" $USER\n");
+    QVERIFY(!result.hasErrors());
+    QCOMPARE(result.root->children.size(), 3);
+    auto pass = result.root->children[0];
+    QCOMPARE(pass->type, NodeType::Input);
+    QCOMPARE(pass->stringValue, "Password:");
+    QCOMPARE(pass->varName, "$PASS");
+    QVERIFY(pass->masked);
+    QVERIFY(result.root->children[1]->masked);
+    QCOMPARE(result.root->children[1]->varName, "$PIN");
+    QVERIFY(!result.root->children[2]->masked);
+
+    // PASSWORD still needs a prompt and a variable
+    QVERIFY(m_parser->parse("INPUT PASSWORD $PASS").hasErrors());
+    QVERIFY(m_parser->parse("INPUT PASSWORD \"Password:\"").hasErrors());
 }
 
 void TestScriptParser::testIfIsset() {

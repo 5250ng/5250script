@@ -75,7 +75,7 @@ enum class NodeType {
     // Utility
     Log,            // LOG "message"
     Pause,          // PAUSE
-    Input           // INPUT "prompt" $var
+    Input           // INPUT [PASSWORD] "prompt" $var
 };
 
 // EXPECT sub-types
@@ -148,6 +148,9 @@ struct ASTNode {
 
     // Variable name (for SET, INC, DEC, ADD, EXTRACT, IF, WHILE)
     QString varName;
+
+    // INPUT PASSWORD: masked prompt whose value is kept out of messages
+    bool masked = false;
 
     // EXPECT specifics
     ExpectType expectType = ExpectType::TextAnywhere;
