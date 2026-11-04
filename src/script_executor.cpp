@@ -155,11 +155,18 @@ void ScriptExecutor::notifyTerminalStateChanged() {
     }
 }
 
+int ScriptExecutor::randomJitterMs(int minMs, int maxMs, QRandomGenerator *rng) {
+    const qint64 lo = std::min(minMs, maxMs);
+    const qint64 hi = std::max(minMs, maxMs);
+    // bounded(lowest, highest) excludes highest; hi + 1 fits in qint64
+    return int(rng->bounded(lo, hi + 1));
+}
+
 void ScriptExecutor::scheduleNextStep(int delayMs) {
     if (!m_running) return;
     int effectiveDelay = std::max(delayMs, m_actionDelay);
     if (m_jitterMax > 0) {
-        int jitter = m_jitterMin + (QRandomGenerator::global()->bounded(m_jitterMax - m_jitterMin + 1));
+        const int jitter = randomJitterMs(m_jitterMin, m_jitterMax, QRandomGenerator::global());
         effectiveDelay = std::max(effectiveDelay, jitter);
     }
     if (effectiveDelay > 0)

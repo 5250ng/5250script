@@ -25,6 +25,8 @@
 #include <QVariant>
 #include <functional>
 
+class QRandomGenerator;
+
 namespace core::scripting {
 
 // Execution settings every script starts with. A script's own GLOBAL
@@ -54,6 +56,12 @@ class ScriptExecutor : public QObject {
     // max < min is swapped.
     void setDefaults(const ExecutionDefaults &defaults);
     ExecutionDefaults defaults() const { return m_defaults; }
+
+    // A random delay in [minMs, maxMs], drawn in 64 bits so the full int
+    // range (for example GLOBAL JITTER 0 2147483647) cannot overflow.
+    // A range given as max < min is swapped (defensive: the parser and
+    // setDefaults() already order it).
+    static int randomJitterMs(int minMs, int maxMs, QRandomGenerator *rng);
 
   signals:
     // Key injection — connect these to MainWindow lambdas that synthesize QKeyEvents
