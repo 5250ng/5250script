@@ -175,6 +175,7 @@ class ScriptExecutor : public QObject {
     void updateBuiltinVariables();
 
     // Screen text helpers
+    int boundedCursorSteps(int count, bool wraps) const;
     QString readScreenText(int row, int col, int length) const;
     QString readFieldText(int row, int col) const;
     bool screenContainsText(const QString &text) const;
