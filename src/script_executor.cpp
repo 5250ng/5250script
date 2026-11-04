@@ -326,21 +326,20 @@ void ScriptExecutor::executeNode(const std::shared_ptr<ASTNode> &node) {
             emit gotoInputField(-2);
             break;
         case MoveCursorMode::StepUp:
-            for (int i = 0; i < node->intValue; ++i)
-                emit moveCursorStep("UP");
-            break;
         case MoveCursorMode::StepDown:
-            for (int i = 0; i < node->intValue; ++i)
-                emit moveCursorStep("DOWN");
-            break;
         case MoveCursorMode::StepLeft:
-            for (int i = 0; i < node->intValue; ++i)
-                emit moveCursorStep("LEFT");
+        case MoveCursorMode::StepRight: {
+            const MoveCursorMode mode = node->moveCursorMode;
+            const bool wraps = mode == MoveCursorMode::StepLeft || mode == MoveCursorMode::StepRight;
+            const QString direction = mode == MoveCursorMode::StepUp     ? QStringLiteral("UP")
+                                      : mode == MoveCursorMode::StepDown ? QStringLiteral("DOWN")
+                                      : mode == MoveCursorMode::StepLeft ? QStringLiteral("LEFT")
+                                                                         : QStringLiteral("RIGHT");
+            const int steps = boundedCursorSteps(node->intValue, wraps);
+            for (int i = 0; i < steps; ++i)
+                emit moveCursorStep(direction);
             break;
-        case MoveCursorMode::StepRight:
-            for (int i = 0; i < node->intValue; ++i)
-                emit moveCursorStep("RIGHT");
-            break;
+        }
         }
         scheduleNextStep();
         break;
@@ -901,6 +900,17 @@ void ScriptExecutor::updateBuiltinVariables() {
 }
 
 // --- Screen text helpers ---
+
+// A step past the screen edge does nothing, so a larger count only blocks the
+// UI thread (5250ng/5250ng#404). Up and down stop at the top and bottom rows.
+// Left and right wrap from row to row but stop at the first and last cells.
+int ScriptExecutor::boundedCursorSteps(int count, bool wraps) const {
+    // Without a screen, assume the largest 5250 display (27x132)
+    const int rows = m_screen ? m_screen->rows() : 27;
+    const int cols = m_screen ? m_screen->cols() : 132;
+    const qint64 limit = wraps ? qint64(rows) * cols - 1 : qint64(rows) - 1;
+    return int(qBound(qint64(0), qint64(count), qMax(qint64(0), limit)));
+}
 
 QString ScriptExecutor::readScreenText(int row, int col, int length) const {
     if (!m_screen) return {};
